@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fmi-be
+  labels:
+    app: fmi-be
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fmi-be
+  template:
+    metadata:
+      labels:
+        app: fmi-be
+    spec:
+      containers:
+        - name: fmi-be
+          image: ghcr.io/find-my-item/fmi-be:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod-mysql
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+
