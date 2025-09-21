@@ -89,3 +89,27 @@ docker build -t fmi-be:local .
 
 ## 라이선스
 - 내부 프로젝트(비공개) 기준. 필요 시 라이선스 명시.
+
+## Git 브랜치 전략 (Git Branch Strategy)
+
+기본 원칙
+모든 작업은 이슈 기반으로 브랜치를 생성하여 진행합니다.
+main 브랜치에 직접적인 commit이나 push는 금지합니다.
+모든 merge는 Pull Request (PR)를 통해서만 진행합니다.
+
+브랜치 명명 규칙
+브랜치 이름은 [이슈번호] 형식으로 생성합니다.
+예시: FIND-001
+
+작업 흐름
+main 브랜치에서 git pull을 통해 최신 상태를 유지합니다.
+main 브랜치로부터 아래 명령어로 새로운 작업 브랜치를 생성합니다.
+git checkout -b FIND-001
+
+기능 개발을 완료한 후 commit과 push를 진행합니다.
+commit 내용은 {feat: {작업 내용}} 양식에 맞춰 push 진행
+GitHub에서 develop 브랜치로 향하는 Pull Request를 생성하고 코드 리뷰를 요청합니다.
+
+의존성이 있는 브랜치 작업
+만약 새로운 이슈(FIND-002)가 기존 브랜치(FIND-001)의 작업물을 필요로 한다면,
+main이 아닌 ART-001 브랜치에서 FIND-002 브랜치를 생성합니다.
