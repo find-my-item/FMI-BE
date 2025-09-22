@@ -1,7 +1,0 @@
-spring:
-  datasource:
-    url: jdbc:sqlite:file:./data/fmi.db?cache=shared
-    driver-class-name: org.sqlite.JDBC
-  jpa:
-    database-platform: org.sqlite.hibernate.dialect.SQLiteDialect
-
