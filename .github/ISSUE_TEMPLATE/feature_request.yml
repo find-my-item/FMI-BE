@@ -1,6 +1,6 @@
-name: 기능/개선 요청
-description: 새 기능/개선 제안 이슈 템플릿
-title: "[기능] <요약>"
+name: "📝 Task"
+description: "일반적인 작업(리팩터링, 문서화, 설정 변경 등)을 기록하는 템플릿"
+title: "[TASK] "
 labels:
   - type: feature
 assignees: []
@@ -19,66 +19,27 @@ body:
         - main 최신화: `git pull --rebase origin main`
         - 브랜치 생성: `git checkout -b <이슈키>` (예: `git checkout -b FIND-001`)
 
-  - type: input
-    id: issue_key
-    attributes:
-      label: 이슈 키
-      description: FIND-001 형태로 작성합니다. 브랜치명으로도 사용됩니다.
-      placeholder: FIND-001
-    validations:
-      required: true
-
-  - type: input
-    id: branch_name
-    attributes:
-      label: 브랜치 이름
-      description: 기본은 이슈 키를 그대로 사용합니다. (예: FIND-001)
-      placeholder: FIND-001
-    validations:
-      required: true
-
   - type: textarea
     id: work_summary
     attributes:
       label: 작업 내용
-      description: 이번 이슈에서 구현/변경할 내용을 한 줄로 요약하세요.
-      placeholder: 로그인/회원가입/비밀번호찾기 공통 UI 컴포넌트(button, input) 및 기능 구현
+      placeholder: "이번 작업의 개요를 간단히 작성해주세요."
     validations:
       required: true
 
-  - type: markdown
+  - type: textarea
+    id: details
     attributes:
-      value: "## API 설계"
+      label: 상세 내용
+      value: |
+        - [ ] 세부 작업 1
+        - [ ] 세부 작업 2
 
   - type: textarea
-    id: api_endpoints
+    id: notes
     attributes:
-      label: API 엔드포인트 목록
-      description: 새로 추가/변경할 모든 엔드포인트를 나열하세요.
-      value: |
-        - [ ] API 1: [METHOD] /path — 목적/요약
-            - 요청 파라미터/바디: { ... }
-            - 응답(200): { ... }
-            - 오류(4xx/5xx): 코드/메시지 규약
-            - 인증/인가: 필요 권한
-        - [ ] API 2: [METHOD] /another-path — 목적/요약
-
-  - type: checkboxes
-    id: common_checklist
-    attributes:
-      label: 공통 체크리스트 (모든 API 공통)
-      options:
-        - label: 요청 값 유효성 검증(Validation)
-        - label: 인증/인가 처리(Security)
-        - label: 비즈니스 로직/도메인 규칙 반영
-        - label: 트랜잭션/동시성 고려
-        - label: 오류/예외 처리 및 표준 응답 형식 정리
-        - label: 로깅/모니터링(요청ID/traceId 등)
-        - label: DB 변경 시 Flyway 마이그레이션 포함 및 롤백 전략
-        - label: OpenAPI/Swagger 문서 업데이트
-        - label: 단위/통합 테스트 작성 및 통과
-        - label: 성능/페이징/인덱스 등 고려
-        - label: 배포 영향도 및 롤아웃 전략 확인
+      label: 참고 사항
+      placeholder: "리뷰어나 팀원이 알아야 할 추가 맥락이 있다면 작성해주세요."
 
   - type: textarea
     id: expected_result

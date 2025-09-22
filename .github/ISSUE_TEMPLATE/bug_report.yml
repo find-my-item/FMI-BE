@@ -1,94 +1,55 @@
-name: 버그 신고
-description: 버그 제보 및 수정 이슈 템플릿
-title: "[버그] <요약>"
+name: "🐞 Bug Report"
+description: "버그 발생 시 제보하는 템플릿"
+title: "[BUG] "
 labels:
-  - type: bug
+  - bug
 assignees: []
 body:
-  - type: markdown
-    attributes:
-      value: |
-        아래 브랜치 전략을 반드시 따릅니다.
-        - main에 직접 push/commit 금지, 모든 수정은 이슈 기반 브랜치에서 진행하고 PR로 머지합니다.
-        - 브랜치 이름은 이슈 키를 사용합니다. 예) FIND-001
-        - 의존 이슈가 있다면 해당 브랜치에서 분기합니다.
-        - 커밋 메시지는 Conventional Commits (fix: …)를 사용합니다.
-
-        브랜치 생성 예시:
-        - main 최신화: `git pull --rebase origin main`
-        - 브랜치 생성: `git checkout -b <이슈키>` (예: `git checkout -b FIND-001`)
-
-  - type: input
-    id: issue_key
-    attributes:
-      label: 이슈 키
-      description: FIND-001 형태로 작성합니다. 브랜치명으로도 사용됩니다.
-      placeholder: FIND-001
-    validations:
-      required: true
-
   - type: textarea
     id: description
     attributes:
       label: 버그 설명
-      description: 무엇이, 언제, 어디서, 얼마나 자주 발생하는지 설명하세요.
-      placeholder: 증상과 범위를 명확히 적어주세요.
+      placeholder: "발생한 버그에 대해 간단히 설명해주세요."
     validations:
       required: true
 
   - type: textarea
     id: reproduction
     attributes:
-      label: 재현 절차
-      description: 가능한 한 정확한 재현 단계와 데이터/권한 등을 적어주세요.
+      label: 재현 방법
       value: |
-        1. 
-        2. 
-        3. 
+        1. ...
+        2. ...
+        3. ...
     validations:
       required: true
 
   - type: textarea
     id: expected
     attributes:
-      label: 기대 결과
-      description: 올바른 동작/결과를 적어주세요.
+      label: 기대 동작
+      placeholder: "정상적으로 동작해야 하는 내용을 작성해주세요."
     validations:
       required: true
 
   - type: textarea
     id: actual
     attributes:
-      label: 실제 결과
-      description: 실제로 관찰된 결과와 메시지/스크린샷/로그를 첨부하세요.
+      label: 실제 동작
+      placeholder: "실제로 어떻게 동작했는지 작성해주세요."
     validations:
       required: true
 
   - type: input
     id: environment
     attributes:
-      label: 환경 정보
-      description: OS/브라우저/앱 버전/백엔드 프로필 등
-      placeholder: "Windows 11, Chrome 128, BE=local"
+      label: 환경
+      placeholder: "OS/브라우저/앱 버전 등 (예: Windows 11, Chrome 128)"
 
   - type: textarea
-    id: logs
+    id: screenshots
     attributes:
-      label: 로그/에러 메시지
-      description: 관련 로그, 스택트레이스, 네트워크 캡처 등
-
-  - type: checkboxes
-    id: branch_policy
-    attributes:
-      label: 브랜치/PR 정책 확인
-      options:
-        - label: main에서 브랜치를 생성한다 (예외적으로 의존 브랜치에서 분기 가능)
-          required: true
-        - label: main에 직접 push/commit 하지 않는다 (반드시 PR로 머지)
-          required: true
-        - label: PR 대상은 develop 브랜치이다
-          required: true
-        - label: 커밋 메시지는 Conventional Commits 양식을 따른다 (fix: …)
-          required: true
+      label: 스크린샷
+      placeholder: 필요하다면 스크린샷/로그를 첨부해주세요.
 
 
