@@ -1,0 +1,7 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Git 브랜치 전략 가이드
+    url: https://github.com/find-my-item/FMI-BE#git-%EB%B8%8C%EB%9E%9C%EC%B9%98-%EC%A0%84%EB%9E%AD-git-branch-strategy
+    about: 브랜치 생성/PR/의존 브랜치 정책을 확인하세요.
+
+
