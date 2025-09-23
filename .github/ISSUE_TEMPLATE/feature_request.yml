@@ -1,0 +1,66 @@
+name: "📝 Task"
+description: "일반적인 작업(리팩터링, 문서화, 설정 변경 등)을 기록하는 템플릿"
+title: "[TASK] "
+labels:
+  - type: feature
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        아래 브랜치 전략을 반드시 따릅니다.
+        - 모든 작업은 이슈 기반 브랜치에서 진행합니다.
+        - main 브랜치에 직접 push/commit 금지, PR로만 머지합니다.
+        - 작업 브랜치는 main에서 생성하며 이름은 이슈 키 그대로 사용합니다. 예) FIND-001
+        - 의존 이슈가 있을 경우, 필요한 작업물이 있는 브랜치에서 분기합니다. 예) FIND-002 → FIND-001에서 분기
+        - 커밋 메시지는 Conventional Commits 양식을 권장합니다. 예) feat: 기능 요약
+
+        브랜치 생성 예시:
+        - main 최신화: `git pull --rebase origin main`
+        - 브랜치 생성: `git checkout -b <이슈키>` (예: `git checkout -b FIND-001`)
+
+  - type: textarea
+    id: work_summary
+    attributes:
+      label: 작업 내용
+      placeholder: "이번 작업의 개요를 간단히 작성해주세요."
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: 상세 내용
+      value: |
+        - [ ] 세부 작업 1
+        - [ ] 세부 작업 2
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: 참고 사항
+      placeholder: "리뷰어나 팀원이 알아야 할 추가 맥락이 있다면 작성해주세요."
+
+  - type: textarea
+    id: expected_result
+    attributes:
+      label: 기대 결과
+      description: 사용자가 확인할 수 있는 최종 결과/데모 기준을 적어주세요.
+
+  - type: checkboxes
+    id: branch_policy
+    attributes:
+      label: 브랜치/PR 정책 확인
+    
+      description: 제출 전 아래 항목을 모두 확인하세요.
+      options:
+        - label: main에서 브랜치를 생성한다 (예외적으로 의존 브랜치에서 분기 가능)
+          required: true
+        - label: main에 직접 push/commit 하지 않는다 (반드시 PR로 머지)
+          required: true
+        - label: PR 대상은 develop 브랜치이다
+          required: true
+        - label: 커밋 메시지는 Conventional Commits 양식을 따른다 (feat/fix/chore/docs/refactor/test 등)
+          required: true
+
+
