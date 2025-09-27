@@ -2,11 +2,12 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.5'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'org.springdoc.openapi-gradle-plugin' version '1.9.0'
 }
 
 group = 'com.fmi'
 version = '0.0.1-SNAPSHOT'
-description = 'Demo project for Spring Boot'
+description = 'Find My Item 백엔드 (Spring Boot)'
 
 java {
 	toolchain {
@@ -44,4 +45,34 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// Generate OpenAPI spec from running app (Method B)
+openApi {
+	// springdoc가 노출하는 런타임 스펙 엔드포인트 (YAML)
+	apiDocsUrl.set("http://localhost:8080/v3/api-docs.yaml")
+	// 산출물 위치/파일명
+	outputDir.set(file("$projectDir/docs"))
+	outputFileName.set("openapi.yaml")
+	// 앱 기동 대기 시간(초)
+	waitTimeInSeconds.set(60)
+}
+
+// Prism/Swagger UI Docker compose helpers
+tasks.register('prismUp', Exec) {
+    description = 'docker-compose.prism.yml로 Prism/Swagger UI를 백그라운드 실행'
+    workingDir = projectDir
+    commandLine 'bash', '-lc', 'docker compose -f docker-compose.prism.yml up -d'
+}
+
+tasks.register('prismRestart', Exec) {
+    description = 'docs/openapi.yaml 변경 사항 반영을 위해 Prism/Swagger UI 컨테이너 재시작'
+    workingDir = projectDir
+    commandLine 'bash', '-lc', 'docker compose -f docker-compose.prism.yml restart'
+}
+
+tasks.register('prismDown', Exec) {
+    description = 'Prism/Swagger UI 컨테이너 중지 및 제거'
+    workingDir = projectDir
+    commandLine 'bash', '-lc', 'docker compose -f docker-compose.prism.yml down'
 }

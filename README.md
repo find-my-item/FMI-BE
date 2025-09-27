@@ -70,6 +70,26 @@ docker compose up -d
 docker build -t fmi-be:local .
 ```
 
+## Mock 서버/Swagger UI 자동화
+1) 앱 실행 후 스펙 산출
+```
+./gradlew.bat bootRun
+./gradlew.bat openApiGenerate
+```
+2) 목 서버/Swagger UI 기동
+```
+./gradlew.bat prismUp
+```
+3) 스펙 수정 반영(재시작)
+```
+./gradlew.bat openApiGenerate
+./gradlew.bat prismRestart
+```
+4) 중지
+```
+./gradlew.bat prismDown
+```
+
 ## GitHub Actions (수동 실행)
 - 워크플로: `.github/workflows/docker-ghcr.yml`
 - 트리거: 수동(`workflow_dispatch`)만
