@@ -76,7 +76,7 @@ public class TokenIssuer {
         return issue(user, false, provider);
     }
 
-    public void revokeIfValid(String refreshToken) {
+    public void revoke(String refreshToken) {
         if (!jwtTokenProvider.validateToken(refreshToken)) {
             return;
         }

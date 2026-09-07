@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fmi.domain.Enum.Provider;
@@ -229,6 +230,45 @@ class TokenIssuerTest {
     class Revoke {
 
         @Nested
+        @DisplayName("refresh token이 유효하지 않으면")
+        class WithInvalidRefreshToken {
+
+            @Test
+            @DisplayName("저장된 토큰을 폐기하지 않는다")
+            void doesNotRevokeToken() {
+                // given
+                String refreshToken = "refresh-token";
+                when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(false);
+
+                // when
+                tokenIssuer.revoke(refreshToken);
+
+                // then
+                verifyNoInteractions(refreshTokenStore);
+            }
+        }
+
+        @Nested
+        @DisplayName("refresh token에 JTI가 없으면")
+        class WithoutJti {
+
+            @Test
+            @DisplayName("저장된 토큰을 폐기하지 않는다")
+            void doesNotRevokeToken() {
+                // given
+                String refreshToken = "refresh-token";
+                when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(true);
+                when(jwtTokenProvider.getJti(refreshToken)).thenReturn(null);
+
+                // when
+                tokenIssuer.revoke(refreshToken);
+
+                // then
+                verifyNoInteractions(refreshTokenStore);
+            }
+        }
+
+        @Nested
         @DisplayName("유효한 refresh token에 JTI가 있으면")
         class WithValidRefreshToken {
 
@@ -241,7 +281,7 @@ class TokenIssuerTest {
                 when(jwtTokenProvider.getJti(refreshToken)).thenReturn("refresh-jti");
 
                 // when
-                tokenIssuer.revokeIfValid(refreshToken);
+                tokenIssuer.revoke(refreshToken);
 
                 // then
                 verify(refreshTokenStore).revoke("refresh-jti");

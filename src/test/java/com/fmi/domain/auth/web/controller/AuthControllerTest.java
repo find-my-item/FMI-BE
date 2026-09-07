@@ -213,6 +213,51 @@ class AuthControllerTest {
                 verifyNoInteractions(tokenIssuer);
             }
         }
+
+        @Nested
+        @DisplayName("갱신 토큰 쿠키 값이 비어 있으면")
+        class WithEmptyRefreshCookie {
+
+            @Test
+            @DisplayName("토큰을 폐기하지 않고 성공 응답을 반환한다")
+            void doesNotRevokeToken() {
+                // given
+                MockHttpServletRequest request = new MockHttpServletRequest();
+                when(authCookieResolver.findRefreshToken(request)).thenReturn(Optional.of(""));
+                when(authCookieFactory.expireAccessCookie(request)).thenReturn(accessCookie(""));
+                when(authCookieFactory.expireRefreshCookie(request)).thenReturn(refreshCookie(""));
+
+                // when
+                ResponseEntity<ApiResponse<String>> response = authController.logout(request);
+
+                // then
+                assertThat(response.getStatusCode().value()).isEqualTo(200);
+                verifyNoInteractions(tokenIssuer);
+            }
+        }
+
+        @Nested
+        @DisplayName("갱신 토큰 쿠키가 있으면")
+        class WithRefreshCookie {
+
+            @Test
+            @DisplayName("토큰 폐기를 요청하고 성공 응답을 반환한다")
+            void revokesToken() {
+                // given
+                String refreshToken = "refresh-token";
+                MockHttpServletRequest request = new MockHttpServletRequest();
+                when(authCookieResolver.findRefreshToken(request)).thenReturn(Optional.of(refreshToken));
+                when(authCookieFactory.expireAccessCookie(request)).thenReturn(accessCookie(""));
+                when(authCookieFactory.expireRefreshCookie(request)).thenReturn(refreshCookie(""));
+
+                // when
+                ResponseEntity<ApiResponse<String>> response = authController.logout(request);
+
+                // then
+                verify(tokenIssuer).revoke(refreshToken);
+                assertThat(response.getStatusCode().value()).isEqualTo(200);
+            }
+        }
     }
 
     @Nested

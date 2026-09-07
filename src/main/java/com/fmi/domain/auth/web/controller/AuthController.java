@@ -102,10 +102,10 @@ public class AuthController implements AuthSwagger {
     @PostMapping("/auth/logout")
     @Override
     public ResponseEntity<ApiResponse<String>> logout(HttpServletRequest request) {
-        String refreshJwt = authCookieResolver.findRefreshToken(request).orElse(null);
-        if (refreshJwt != null && !refreshJwt.isEmpty()) {
-            tokenIssuer.revokeIfValid(refreshJwt);
-        }
+        authCookieResolver
+                .findRefreshToken(request)
+                .filter(token -> !token.isEmpty())
+                .ifPresent(tokenIssuer::revoke);
 
         ResponseCookie accessCookie = authCookieFactory.expireAccessCookie(request);
         ResponseCookie refreshCookie = authCookieFactory.expireRefreshCookie(request);
