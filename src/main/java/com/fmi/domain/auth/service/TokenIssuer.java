@@ -4,6 +4,8 @@ import com.fmi.domain.Enum.Provider;
 import com.fmi.domain.auth.repository.SocialAccountsRepository;
 import com.fmi.domain.user.data.User;
 import com.fmi.domain.user.repository.UserRepository;
+import com.fmi.global.apiPayload.code.status.ErrorStatus;
+import com.fmi.global.apiPayload.exception.GeneralException;
 import com.fmi.security.JwtTokenProvider;
 import com.fmi.security.RefreshTokenStore;
 import java.nio.charset.StandardCharsets;
@@ -47,32 +49,31 @@ public class TokenIssuer {
         return new IssuedTokens(accessToken, accessExpiration, refreshToken, refreshExpiration);
     }
 
-    public RefreshResult refresh(String refreshToken) {
+    public IssuedTokens refresh(String refreshToken) {
         if (!jwtTokenProvider.validateToken(refreshToken)) {
-            return RefreshResult.failure(RefreshFailure.INVALID_TOKEN);
+            throw new GeneralException(ErrorStatus._INVALID_REFRESH_TOKEN);
         }
 
         String email = jwtTokenProvider.getSubject(refreshToken);
         String jti = jwtTokenProvider.getJti(refreshToken);
         if (jti == null || jti.isEmpty()) {
-            return RefreshResult.failure(RefreshFailure.MISSING_JTI);
+            throw new GeneralException(ErrorStatus._INVALID_REFRESH_TOKEN);
         }
 
         if (!refreshTokenStore.validate(jti, sha256Hex(refreshToken), email)) {
-            return RefreshResult.failure(RefreshFailure.HASH_MISMATCH);
+            throw new GeneralException(ErrorStatus._INVALID_REFRESH_TOKEN);
         }
 
-        User user = userRepository.findByEmail(email).orElse(null);
-        if (user == null) {
-            return RefreshResult.failure(RefreshFailure.USER_NOT_FOUND);
-        }
+        User user = userRepository
+                .findByEmail(email)
+                .orElseThrow(() -> new GeneralException(ErrorStatus._INVALID_REFRESH_TOKEN));
 
         refreshTokenStore.revoke(jti);
         Provider provider = socialAccountsRepository
                 .findByUser(user)
                 .map(account -> account.getProvider())
                 .orElse(null);
-        return RefreshResult.success(issue(user, false, provider));
+        return issue(user, false, provider);
     }
 
     public void revokeIfValid(String refreshToken) {
@@ -97,26 +98,4 @@ public class TokenIssuer {
 
     public record IssuedTokens(
             String accessToken, Date accessExpiration, String refreshToken, Date refreshExpiration) {}
-
-    public record RefreshResult(IssuedTokens issuedTokens, RefreshFailure failure) {
-
-        private static RefreshResult success(IssuedTokens issuedTokens) {
-            return new RefreshResult(issuedTokens, null);
-        }
-
-        private static RefreshResult failure(RefreshFailure failure) {
-            return new RefreshResult(null, failure);
-        }
-
-        public boolean isSuccess() {
-            return issuedTokens != null;
-        }
-    }
-
-    public enum RefreshFailure {
-        INVALID_TOKEN,
-        MISSING_JTI,
-        HASH_MISMATCH,
-        USER_NOT_FOUND
-    }
 }

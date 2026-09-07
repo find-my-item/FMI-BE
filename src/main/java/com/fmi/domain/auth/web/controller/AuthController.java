@@ -15,6 +15,8 @@ import com.fmi.domain.auth.web.swagger.AuthSwagger;
 import com.fmi.domain.user.service.NicknameService;
 import com.fmi.domain.user.web.response.CheckResponse;
 import com.fmi.global.apiPayload.ApiResponse;
+import com.fmi.global.apiPayload.code.status.ErrorStatus;
+import com.fmi.global.apiPayload.exception.GeneralException;
 import com.fmi.security.AuthCookieFactory;
 import com.fmi.security.AuthCookieResolver;
 import jakarta.servlet.http.HttpServletRequest;
@@ -65,20 +67,11 @@ public class AuthController implements AuthSwagger {
     @PostMapping("/auth/refresh")
     @Override
     public ResponseEntity<ApiResponse<LoginResponse>> refresh(HttpServletRequest request) {
-        String refreshJwt = authCookieResolver.findRefreshToken(request).orElse(null);
-        if (refreshJwt == null || refreshJwt.isEmpty()) {
-            return ResponseEntity.status(401)
-                    .body(ApiResponse.onFailure("AUTH401-INVALID_REFRESH", "리프레시 토큰 없음", null));
-        }
-
-        TokenIssuer.RefreshResult refreshResult = tokenIssuer.refresh(refreshJwt);
-        if (!refreshResult.isSuccess()) {
-            return ResponseEntity.status(401)
-                    .body(ApiResponse.onFailure(
-                            "AUTH401-INVALID_REFRESH", refreshFailureMessage(refreshResult.failure()), null));
-        }
-
-        TokenIssuer.IssuedTokens issuedTokens = refreshResult.issuedTokens();
+        String refreshJwt = authCookieResolver
+                .findRefreshToken(request)
+                .filter(token -> !token.isEmpty())
+                .orElseThrow(() -> new GeneralException(ErrorStatus._REFRESH_TOKEN_NOT_FOUND));
+        TokenIssuer.IssuedTokens issuedTokens = tokenIssuer.refresh(refreshJwt);
 
         ResponseCookie accessCookie = authCookieFactory.createAccessCookie(
                 request, issuedTokens.accessToken(), issuedTokens.accessExpiration());
@@ -149,14 +142,5 @@ public class AuthController implements AuthSwagger {
                 .header("Set-Cookie", accessCookie.toString())
                 .header("Set-Cookie", refreshCookie.toString())
                 .body(ApiResponse.onSuccess(null));
-    }
-
-    private static String refreshFailureMessage(TokenIssuer.RefreshFailure failure) {
-        return switch (failure) {
-            case INVALID_TOKEN -> "유효하지 않은 리프레시";
-            case MISSING_JTI -> "유효하지 않은 리프레시(jti 없음)";
-            case HASH_MISMATCH -> "유효하지 않은 리프레시(대조 실패)";
-            case USER_NOT_FOUND -> "유효하지 않은 리프레시(사용자 없음)";
-        };
     }
 }

@@ -1,6 +1,7 @@
 package com.fmi.domain.auth.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -14,6 +15,8 @@ import com.fmi.domain.auth.data.SocialAccounts;
 import com.fmi.domain.auth.repository.SocialAccountsRepository;
 import com.fmi.domain.user.data.User;
 import com.fmi.domain.user.repository.UserRepository;
+import com.fmi.global.apiPayload.code.status.ErrorStatus;
+import com.fmi.global.apiPayload.exception.GeneralException;
 import com.fmi.security.JwtTokenProvider;
 import com.fmi.security.RefreshTokenStore;
 import java.time.Instant;
@@ -23,8 +26,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InOrder;
@@ -114,40 +115,61 @@ class TokenIssuerTest {
         @DisplayName("refresh token 검증에 실패하면")
         class WithInvalidRefreshToken {
 
-            @ParameterizedTest
-            @EnumSource(TokenIssuer.RefreshFailure.class)
-            @DisplayName("Redis 상태를 변경하지 않고 실패 원인을 반환한다")
-            void returnsFailureWithoutChangingRedis(TokenIssuer.RefreshFailure expectedFailure) {
+            @Test
+            @DisplayName("Redis 상태를 변경하지 않고 유효하지 않은 refresh token 예외를 던진다")
+            void throwsExceptionWithoutChangingRedis() {
+                // given
+                String refreshToken = "refresh-token";
+                when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(false);
+
+                // when & then
+                assertInvalidRefreshTokenWithoutChangingRedis(refreshToken);
+            }
+
+            @Test
+            @DisplayName("JTI가 없으면 Redis 상태를 변경하지 않고 외부용 토큰 예외를 던진다")
+            void throwsExceptionWhenJtiIsMissing() {
+                // given
+                String refreshToken = "refresh-token";
+                when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(true);
+                when(jwtTokenProvider.getSubject(refreshToken)).thenReturn("member@finditem.kr");
+                when(jwtTokenProvider.getJti(refreshToken)).thenReturn(null);
+
+                // when & then
+                assertInvalidRefreshTokenWithoutChangingRedis(refreshToken);
+            }
+
+            @Test
+            @DisplayName("저장된 hash와 다르면 Redis 상태를 변경하지 않고 외부용 토큰 예외를 던진다")
+            void throwsExceptionWhenHashDoesNotMatch() {
                 // given
                 String refreshToken = "refresh-token";
                 String email = "member@finditem.kr";
-                when(jwtTokenProvider.validateToken(refreshToken))
-                        .thenReturn(expectedFailure != TokenIssuer.RefreshFailure.INVALID_TOKEN);
-                if (expectedFailure != TokenIssuer.RefreshFailure.INVALID_TOKEN) {
-                    when(jwtTokenProvider.getSubject(refreshToken)).thenReturn(email);
-                }
-                if (expectedFailure == TokenIssuer.RefreshFailure.HASH_MISMATCH
-                        || expectedFailure == TokenIssuer.RefreshFailure.USER_NOT_FOUND) {
-                    when(jwtTokenProvider.getJti(refreshToken)).thenReturn("refresh-jti");
-                }
-                if (expectedFailure == TokenIssuer.RefreshFailure.HASH_MISMATCH) {
-                    when(refreshTokenStore.validate(eq("refresh-jti"), anyString(), eq(email)))
-                            .thenReturn(false);
-                }
-                if (expectedFailure == TokenIssuer.RefreshFailure.USER_NOT_FOUND) {
-                    when(refreshTokenStore.validate(eq("refresh-jti"), anyString(), eq(email)))
-                            .thenReturn(true);
-                    when(userRepository.findByEmail(email)).thenReturn(java.util.Optional.empty());
-                }
+                when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(true);
+                when(jwtTokenProvider.getSubject(refreshToken)).thenReturn(email);
+                when(jwtTokenProvider.getJti(refreshToken)).thenReturn("refresh-jti");
+                when(refreshTokenStore.validate(eq("refresh-jti"), anyString(), eq(email)))
+                        .thenReturn(false);
 
-                // when
-                TokenIssuer.RefreshResult refreshResult = tokenIssuer.refresh(refreshToken);
+                // when & then
+                assertInvalidRefreshTokenWithoutChangingRedis(refreshToken);
+            }
 
-                // then
-                assertThat(refreshResult.issuedTokens()).isNull();
-                assertThat(refreshResult.failure()).isEqualTo(expectedFailure);
-                verify(refreshTokenStore, never()).revoke(anyString());
-                verify(refreshTokenStore, never()).issue(anyString(), anyString(), anyString(), any());
+            @Test
+            @DisplayName("사용자를 찾을 수 없으면 Redis 상태를 변경하지 않고 외부용 토큰 예외를 던진다")
+            void throwsExceptionWhenUserDoesNotExist() {
+                // given
+                String refreshToken = "refresh-token";
+                String email = "member@finditem.kr";
+                when(jwtTokenProvider.validateToken(refreshToken)).thenReturn(true);
+                when(jwtTokenProvider.getSubject(refreshToken)).thenReturn(email);
+                when(jwtTokenProvider.getJti(refreshToken)).thenReturn("refresh-jti");
+                when(refreshTokenStore.validate(eq("refresh-jti"), anyString(), eq(email)))
+                        .thenReturn(true);
+                when(userRepository.findByEmail(email)).thenReturn(java.util.Optional.empty());
+
+                // when & then
+                assertInvalidRefreshTokenWithoutChangingRedis(refreshToken);
             }
         }
 
@@ -187,7 +209,7 @@ class TokenIssuerTest {
                 when(jwtTokenProvider.getExpiration("refresh-token")).thenReturn(refreshExpiration);
 
                 // when
-                TokenIssuer.RefreshResult refreshResult = tokenIssuer.refresh(oldRefreshToken);
+                TokenIssuer.IssuedTokens issuedTokens = tokenIssuer.refresh(oldRefreshToken);
 
                 // then
                 InOrder refreshStoreOrder = org.mockito.Mockito.inOrder(refreshTokenStore);
@@ -196,8 +218,7 @@ class TokenIssuerTest {
                 refreshStoreOrder
                         .verify(refreshTokenStore)
                         .issue(anyString(), eq(user.getEmail()), anyString(), eq(refreshExpiration.toInstant()));
-                assertThat(refreshResult.issuedTokens()).isNotNull();
-                assertThat(refreshResult.failure()).isNull();
+                assertThat(issuedTokens).isNotNull();
                 assertThat(claimsCaptor.getValue()).containsEntry("provider", "KAKAO");
             }
         }
@@ -226,6 +247,14 @@ class TokenIssuerTest {
                 verify(refreshTokenStore).revoke("refresh-jti");
             }
         }
+    }
+
+    private void assertInvalidRefreshTokenWithoutChangingRedis(String refreshToken) {
+        assertThatThrownBy(() -> tokenIssuer.refresh(refreshToken))
+                .isInstanceOfSatisfying(GeneralException.class, exception -> assertThat(exception.getCode())
+                        .isEqualTo(ErrorStatus._INVALID_REFRESH_TOKEN));
+        verify(refreshTokenStore, never()).revoke(anyString());
+        verify(refreshTokenStore, never()).issue(anyString(), anyString(), anyString(), any());
     }
 
     private static String sha256Hex(String value) {

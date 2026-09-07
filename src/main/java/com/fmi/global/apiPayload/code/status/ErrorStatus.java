@@ -25,6 +25,8 @@ public enum ErrorStatus implements BaseErrorCode {
     _EMAIL_VERIFY_FAILED(HttpStatus.BAD_REQUEST, "AUTH400-EMAIL_VERIFY_FAILED", "인증 코드가 만료되었거나 일치하지 않습니다."),
     _EMAIL_SEND_FAILED(
             HttpStatus.INTERNAL_SERVER_ERROR, "AUTH500-EMAIL_SEND_FAILED", "이메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요."),
+    _REFRESH_TOKEN_NOT_FOUND(HttpStatus.UNAUTHORIZED, "AUTH401-INVALID_REFRESH", "리프레시 토큰이 없습니다."),
+    _INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH401-INVALID_REFRESH", "리프레시 토큰이 유효하지 않습니다."),
     _NICKNAME_DUPLICATED(HttpStatus.CONFLICT, "AUTH409-NICKNAME_DUPLICATED", "이미 사용 중인 닉네임입니다."),
     _INVALID_NICKNAME(HttpStatus.BAD_REQUEST, "AUTH400-INVALID_NICKNAME", "닉네임은 공백일 수 없습니다."),
     _WEAK_PASSWORD(
