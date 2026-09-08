@@ -1,9 +1,10 @@
 package com.fmi.domain.auth.web.controller;
 
 import com.fmi.domain.auth.converter.AuthConverter;
+import com.fmi.domain.auth.data.IssuedTokens;
 import com.fmi.domain.auth.service.AuthService;
 import com.fmi.domain.auth.service.PasswordService;
-import com.fmi.domain.auth.service.TokenIssuer;
+import com.fmi.domain.auth.service.TokenService;
 import com.fmi.domain.auth.service.WithdrawalService;
 import com.fmi.domain.auth.web.dto.AccountDeleteRequest;
 import com.fmi.domain.auth.web.dto.LoginRequest;
@@ -35,7 +36,7 @@ public class AuthController implements AuthSwagger {
 
     private final AuthService authService;
     private final NicknameService nicknameService;
-    private final TokenIssuer tokenIssuer;
+    private final TokenService tokenService;
     private final PasswordService passwordService;
     private final WithdrawalService withdrawalService;
     private final AuthCookieFactory authCookieFactory;
@@ -71,7 +72,7 @@ public class AuthController implements AuthSwagger {
                 .findRefreshToken(request)
                 .filter(token -> !token.isEmpty())
                 .orElseThrow(() -> new GeneralException(ErrorStatus._REFRESH_TOKEN_NOT_FOUND));
-        TokenIssuer.IssuedTokens issuedTokens = tokenIssuer.refresh(refreshJwt);
+        IssuedTokens issuedTokens = tokenService.refresh(refreshJwt);
 
         ResponseCookie accessCookie = authCookieFactory.createAccessCookie(
                 request, issuedTokens.accessToken(), issuedTokens.accessExpiration());
@@ -86,7 +87,7 @@ public class AuthController implements AuthSwagger {
 
     private ResponseEntity<ApiResponse<LoginResponse>> buildTokenResponse(
             HttpServletRequest request, com.fmi.domain.user.data.User user, boolean isTemporaryPassword) {
-        TokenIssuer.IssuedTokens issuedTokens = tokenIssuer.issue(user, isTemporaryPassword, null);
+        IssuedTokens issuedTokens = tokenService.issue(user, isTemporaryPassword, null);
 
         ResponseCookie accessCookie = authCookieFactory.createAccessCookie(
                 request, issuedTokens.accessToken(), issuedTokens.accessExpiration());
@@ -105,7 +106,7 @@ public class AuthController implements AuthSwagger {
         authCookieResolver
                 .findRefreshToken(request)
                 .filter(token -> !token.isEmpty())
-                .ifPresent(tokenIssuer::revoke);
+                .ifPresent(tokenService::revoke);
 
         ResponseCookie accessCookie = authCookieFactory.expireAccessCookie(request);
         ResponseCookie refreshCookie = authCookieFactory.expireRefreshCookie(request);

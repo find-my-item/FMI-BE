@@ -19,6 +19,8 @@ logout은 오류 응답을 직접 만들지는 않지만 Controller에서 refres
 - Controller에서 토큰 실패 응답을 직접 만들지 않는다.
 - 토큰 오류 코드와 메시지는 `ErrorStatus`에서 관리한다.
 - `ExceptionAdvice`가 토큰 예외를 기존 `ApiResponse` 형식으로 변환한다.
+- 토큰 유스케이스는 `TokenService`가 제공하고 실제 발급은 내부 `TokenIssuer`가 담당한다.
+- 발급 결과는 `data`의 `IssuedTokens` 값 객체로 관리한다.
 - refresh와 logout Controller에는 정상 응답 조립만 남긴다.
 
 ## 비목표
@@ -31,9 +33,9 @@ logout은 오류 응답을 직접 만들지는 않지만 Controller에서 refres
 
 ## 책임 변경
 
-### `TokenIssuer`
+### `TokenService`
 
-`refresh()`는 성공 결과와 실패 원인을 함께 담은 `RefreshResult`를 반환하지 않는다. 성공하면 `IssuedTokens`를 반환하고, 실패하면 원인에 맞는 애플리케이션 예외를 던진다.
+Controller에 `issue()`, `refresh()`, `revoke()` 토큰 유스케이스를 제공한다. `issue()`는 내부 발급기가 생성한 refresh token의 hash를 저장한다. `refresh()`는 성공하면 `IssuedTokens`를 반환하고, 실패하면 원인에 맞는 애플리케이션 예외를 던진다.
 
 예외로 전환할 현재 실패 조건은 다음과 같다.
 
@@ -44,9 +46,15 @@ logout은 오류 응답을 직접 만들지는 않지만 Controller에서 refres
 
 각 실패에서는 Redis의 기존 토큰을 폐기하거나 새 토큰을 저장하지 않는다.
 
+### `TokenIssuer`와 `IssuedTokens`
+
+`TokenIssuer`는 `service.internal`에 두고 access token, refresh token과 JTI를 생성하는 발급 책임만 담당한다. `TokenService.issue()`와 정상적인 `refresh()`가 실제 발급을 `TokenIssuer`에 위임하며, refresh token hash 저장은 공개 유스케이스를 관리하는 `TokenService`가 담당한다. hash 계산만을 위한 별도 객체는 두지 않는다.
+
+발급 결과인 `IssuedTokens`는 서비스 구현 클래스와 분리해 `data`의 값 객체로 관리한다. Controller는 `IssuedTokens`로 쿠키를 생성하지만 HTTP 응답 본문에는 포함하지 않는다.
+
 ### `AuthController`
 
-`refresh()`는 `AuthCookieResolver`에서 refresh token을 `Optional`로 조회하고 `TokenIssuer.refresh()`를 호출한 뒤 정상 응답을 만든다. 다음 로직은 제거한다.
+`refresh()`는 `AuthCookieResolver`에서 refresh token을 `Optional`로 조회하고 `TokenService.refresh()`를 호출한 뒤 정상 응답을 만든다. 다음 로직은 제거한다.
 
 - 쿠키 누락 시 직접 생성하는 401 `ResponseEntity`
 - `RefreshResult.isSuccess()` 분기
@@ -55,7 +63,7 @@ logout은 오류 응답을 직접 만들지는 않지만 Controller에서 refres
 
 refresh token 쿠키가 없거나 값이 비어 있으면 Controller가 `Optional.filter()`와 `orElseThrow()`를 사용해 정의된 애플리케이션 예외를 던진다.
 
-logout은 기존 계약대로 항상 성공하고 쿠키를 만료시킨다. Controller는 `Optional.filter()`와 `ifPresent()`로 값이 있는 refresh token만 `TokenIssuer.revoke()`에 전달하고, 토큰 유효성 판단은 `TokenIssuer`가 담당한다.
+logout은 기존 계약대로 항상 성공하고 쿠키를 만료시킨다. Controller는 `Optional.filter()`와 `ifPresent()`로 값이 있는 refresh token만 `TokenService.revoke()`에 전달하고, 토큰 유효성 판단은 `TokenService`가 담당한다.
 
 ### `ErrorStatus`와 `ExceptionAdvice`
 
@@ -69,8 +77,9 @@ refresh token 누락과 유효하지 않은 refresh token에 사용할 오류 �
 AuthController.refresh()
   -> AuthCookieResolver에서 refresh cookie를 Optional로 조회
   -> 누락 또는 빈 값이면 토큰 예외 발생
-  -> TokenIssuer.refresh()
+  -> TokenService.refresh()
        -> 실패이면 토큰 예외 발생
+       -> 성공이면 내부 TokenIssuer에 새 토큰 발급 위임
        -> 성공이면 IssuedTokens 반환
   -> access/refresh 쿠키 생성
   -> 정상 응답 반환
@@ -84,12 +93,13 @@ AuthController.refresh()
 
 1. refresh token 누락과 각 `RefreshFailure`의 현재 응답 및 Redis 미변경 동작을 테스트로 고정한다.
 2. refresh token 오류에 사용할 `ErrorStatus`와 외부 메시지를 확정한다.
-3. `TokenIssuer.refresh()`가 실패 시 예외를 던지고 성공 시 `IssuedTokens`를 반환하도록 변경한다.
+3. `TokenService.refresh()`가 실패 시 예외를 던지고 성공 시 `IssuedTokens`를 반환하도록 변경한다.
 4. `RefreshResult`와 `RefreshFailure`를 제거한다.
-5. `AuthController.refresh()`의 직접 오류 응답과 `refreshFailureMessage()`를 제거한다.
-6. logout의 누락·무효 토큰 계약에 따라 Controller 분기를 제거하거나 예외 흐름을 적용한다.
-7. `ExceptionAdvice`를 통한 상태 코드, 오류 코드, 응답 본문을 Controller 테스트로 검증한다.
-8. `spotlessApply`, 관련 테스트, 전체 테스트, `spotlessCheck` 순서로 검증한다.
+5. `IssuedTokens`를 `data`의 값 객체로 분리하고, 발급만 담당하는 `TokenIssuer`를 `service.internal`로 이동한다.
+6. `AuthController.refresh()`의 직접 오류 응답과 `refreshFailureMessage()`를 제거한다.
+7. logout의 누락·무효 토큰 계약에 따라 Controller 분기를 제거하거나 예외 흐름을 적용한다.
+8. `ExceptionAdvice`를 통한 상태 코드, 오류 코드, 응답 본문을 Controller 테스트로 검증한다.
+9. `spotlessApply`, 관련 테스트, 전체 테스트, `spotlessCheck` 순서로 검증한다.
 
 ## 테스트 계획
 
@@ -112,6 +122,8 @@ AuthController.refresh()
 ## 완료 기준
 
 - `RefreshResult`, `RefreshFailure`, `refreshFailureMessage()`가 제거된다.
+- `IssuedTokens`가 `data`의 독립 값 객체로 관리된다.
+- `TokenIssuer`에는 토큰 발급 책임만 남고 Controller는 `TokenService`에만 의존한다.
 - refresh 실패 코드와 메시지를 Controller가 직접 작성하지 않는다.
 - refresh token 실패가 정의된 예외와 `ErrorStatus`로 표현된다.
 - `ExceptionAdvice`가 토큰 오류 응답을 일관된 `ApiResponse`로 변환한다.

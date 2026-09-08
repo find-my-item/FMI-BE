@@ -1,8 +1,9 @@
 package com.fmi.domain.auth.web.controller;
 
 import com.fmi.domain.Enum.Provider;
+import com.fmi.domain.auth.data.IssuedTokens;
 import com.fmi.domain.auth.service.SocialLoginService;
-import com.fmi.domain.auth.service.TokenIssuer;
+import com.fmi.domain.auth.service.TokenService;
 import com.fmi.domain.auth.web.dto.AppleLoginRequest;
 import com.fmi.domain.auth.web.response.LoginResponse;
 import com.fmi.external.oauth.apple.AppleOAuthClient;
@@ -25,7 +26,7 @@ public class AppleAuthController {
 
     private final AppleOAuthClient appleOAuthService;
     private final SocialLoginService socialLoginService;
-    private final TokenIssuer tokenIssuer;
+    private final TokenService tokenService;
     private final AuthCookieFactory authCookieFactory;
 
     @PostMapping
@@ -35,7 +36,7 @@ public class AppleAuthController {
         var localUser = socialLoginService.upsertUserFromApple(subject).user();
         boolean termsAgreed = localUser.isPrivacyPolicyAgreed() && localUser.isTermsOfServiceAgreed();
 
-        TokenIssuer.IssuedTokens issuedTokens = tokenIssuer.issue(localUser, false, Provider.APPLE);
+        IssuedTokens issuedTokens = tokenService.issue(localUser, false, Provider.APPLE);
 
         ResponseCookie accessCookie = authCookieFactory.createAccessCookie(
                 httpServletRequest, issuedTokens.accessToken(), issuedTokens.accessExpiration());

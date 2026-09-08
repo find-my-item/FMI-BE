@@ -11,9 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fmi.domain.Enum.Role;
 import com.fmi.domain.Enum.WithdrawalReason;
+import com.fmi.domain.auth.data.IssuedTokens;
 import com.fmi.domain.auth.service.AuthService;
 import com.fmi.domain.auth.service.PasswordService;
-import com.fmi.domain.auth.service.TokenIssuer;
+import com.fmi.domain.auth.service.TokenService;
 import com.fmi.domain.auth.service.WithdrawalService;
 import com.fmi.domain.auth.web.dto.AccountDeleteRequest;
 import com.fmi.domain.auth.web.dto.LoginRequest;
@@ -61,7 +62,7 @@ class AuthControllerTest {
     private NicknameService nicknameService;
 
     @Mock
-    private TokenIssuer tokenIssuer;
+    private TokenService tokenService;
 
     @Mock
     private PasswordService passwordService;
@@ -112,12 +113,12 @@ class AuthControllerTest {
                         .andExpect(jsonPath("$.isSuccess").value(false))
                         .andExpect(jsonPath("$.code").value("AUTH401-INVALID_REFRESH"))
                         .andExpect(jsonPath("$.message").value("리프레시 토큰이 없습니다."));
-                verifyNoInteractions(tokenIssuer);
+                verifyNoInteractions(tokenService);
             }
         }
 
         @Nested
-        @DisplayName("TokenIssuer가 갱신에 실패하면")
+        @DisplayName("TokenService가 갱신에 실패하면")
         class WithRefreshFailure {
 
             @Test
@@ -127,7 +128,7 @@ class AuthControllerTest {
                 String refreshToken = "refresh-token";
                 when(authCookieResolver.findRefreshToken(any(HttpServletRequest.class)))
                         .thenReturn(Optional.of(refreshToken));
-                when(tokenIssuer.refresh(refreshToken))
+                when(tokenService.refresh(refreshToken))
                         .thenThrow(new GeneralException(ErrorStatus._INVALID_REFRESH_TOKEN));
 
                 // when
@@ -156,9 +157,9 @@ class AuthControllerTest {
                 Date refreshExpiration = Date.from(Instant.now().plusSeconds(1_200));
 
                 when(authCookieResolver.findRefreshToken(request)).thenReturn(Optional.of(oldRefreshToken));
-                when(tokenIssuer.refresh(oldRefreshToken))
-                        .thenReturn(new TokenIssuer.IssuedTokens(
-                                newAccessToken, accessExpiration, newRefreshToken, refreshExpiration));
+                when(tokenService.refresh(oldRefreshToken))
+                        .thenReturn(
+                                new IssuedTokens(newAccessToken, accessExpiration, newRefreshToken, refreshExpiration));
                 when(authCookieFactory.createAccessCookie(request, newAccessToken, accessExpiration))
                         .thenReturn(accessCookie(newAccessToken));
                 when(authCookieFactory.createRefreshCookie(request, newRefreshToken, refreshExpiration))
@@ -168,7 +169,7 @@ class AuthControllerTest {
                 ResponseEntity<ApiResponse<LoginResponse>> response = authController.refresh(request);
 
                 // then
-                verify(tokenIssuer).refresh(oldRefreshToken);
+                verify(tokenService).refresh(oldRefreshToken);
                 assertThat(response.getStatusCode().value()).isEqualTo(200);
                 assertThat(response.getHeaders().get("Set-Cookie"))
                         .containsExactly("access_token=" + newAccessToken, "refresh_token=" + newRefreshToken);
@@ -210,7 +211,7 @@ class AuthControllerTest {
                                 "access_token=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
                                 "refresh_token=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
                 assertThat(response.getBody().getResult()).isEqualTo("OK");
-                verifyNoInteractions(tokenIssuer);
+                verifyNoInteractions(tokenService);
             }
         }
 
@@ -232,7 +233,7 @@ class AuthControllerTest {
 
                 // then
                 assertThat(response.getStatusCode().value()).isEqualTo(200);
-                verifyNoInteractions(tokenIssuer);
+                verifyNoInteractions(tokenService);
             }
         }
 
@@ -254,7 +255,7 @@ class AuthControllerTest {
                 ResponseEntity<ApiResponse<String>> response = authController.logout(request);
 
                 // then
-                verify(tokenIssuer).revoke(refreshToken);
+                verify(tokenService).revoke(refreshToken);
                 assertThat(response.getStatusCode().value()).isEqualTo(200);
             }
         }
@@ -285,9 +286,8 @@ class AuthControllerTest {
 
                 when(authService.authenticate(email, "temporary-password"))
                         .thenReturn(new AuthService.AuthenticateResult(user, true));
-                when(tokenIssuer.issue(user, true, null))
-                        .thenReturn(new TokenIssuer.IssuedTokens(
-                                accessToken, accessExpiration, refreshToken, refreshExpiration));
+                when(tokenService.issue(user, true, null))
+                        .thenReturn(new IssuedTokens(accessToken, accessExpiration, refreshToken, refreshExpiration));
                 when(authCookieFactory.createAccessCookie(httpRequest, accessToken, accessExpiration))
                         .thenReturn(accessCookie(accessToken));
                 when(authCookieFactory.createRefreshCookie(httpRequest, refreshToken, refreshExpiration))
@@ -297,7 +297,7 @@ class AuthControllerTest {
                 ResponseEntity<ApiResponse<LoginResponse>> response = authController.login(request, httpRequest);
 
                 // then
-                verify(tokenIssuer).issue(user, true, null);
+                verify(tokenService).issue(user, true, null);
                 assertThat(response.getStatusCode().value()).isEqualTo(200);
                 assertThat(response.getHeaders().get("Set-Cookie"))
                         .containsExactly("access_token=" + accessToken, "refresh_token=" + refreshToken);

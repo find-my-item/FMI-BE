@@ -1,7 +1,9 @@
 package com.fmi.domain.auth.service;
 
 import com.fmi.domain.Enum.Provider;
+import com.fmi.domain.auth.data.IssuedTokens;
 import com.fmi.domain.auth.repository.SocialAccountsRepository;
+import com.fmi.domain.auth.service.internal.TokenIssuer;
 import com.fmi.domain.user.data.User;
 import com.fmi.domain.user.repository.UserRepository;
 import com.fmi.global.apiPayload.code.status.ErrorStatus;
@@ -11,42 +13,29 @@ import com.fmi.security.RefreshTokenStore;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.HexFormat;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-public class TokenIssuer {
+public class TokenService {
 
+    private final TokenIssuer tokenIssuer;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenStore refreshTokenStore;
     private final UserRepository userRepository;
     private final SocialAccountsRepository socialAccountsRepository;
 
     public IssuedTokens issue(User user, boolean isTemporaryPassword, Provider provider) {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("userId", user.getId());
-        claims.put("role", user.getRole().name());
-        if (provider != null) {
-            claims.put("provider", provider.name());
-        }
-        claims.put("purpose", "access");
-        if (isTemporaryPassword) {
-            claims.put("isTemporaryPassword", true);
-        }
-
-        String accessToken = jwtTokenProvider.createAccessToken(user.getEmail(), claims);
-        String jti = UUID.randomUUID().toString();
-        String refreshToken = jwtTokenProvider.createRefreshToken(user.getEmail(), jti);
-        Date accessExpiration = jwtTokenProvider.getExpiration(accessToken);
-        Date refreshExpiration = jwtTokenProvider.getExpiration(refreshToken);
-        refreshTokenStore.issue(jti, user.getEmail(), sha256Hex(refreshToken), refreshExpiration.toInstant());
-
-        return new IssuedTokens(accessToken, accessExpiration, refreshToken, refreshExpiration);
+        TokenIssuer.IssueResult issueResult = tokenIssuer.issue(user, isTemporaryPassword, provider);
+        IssuedTokens issuedTokens = issueResult.issuedTokens();
+        refreshTokenStore.issue(
+                issueResult.refreshTokenId(),
+                user.getEmail(),
+                sha256Hex(issuedTokens.refreshToken()),
+                issuedTokens.refreshExpiration().toInstant());
+        return issuedTokens;
     }
 
     public IssuedTokens refresh(String refreshToken) {
@@ -89,13 +78,10 @@ public class TokenIssuer {
 
     private static String sha256Hex(String value) {
         try {
-            return java.util.HexFormat.of()
-                    .formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+            byte[] hash = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 not available", exception);
         }
     }
-
-    public record IssuedTokens(
-            String accessToken, Date accessExpiration, String refreshToken, Date refreshExpiration) {}
 }
