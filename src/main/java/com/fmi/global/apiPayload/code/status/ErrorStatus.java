@@ -81,6 +81,12 @@ public enum ErrorStatus implements BaseErrorCode {
             HttpStatus.TOO_MANY_REQUESTS, "POST429-UPDATE_RATE_LIMITED", "게시글 수정이 1분에 5번을 초과했습니다. 잠시 후 다시 시도해주세요."),
 
     // 번역 관련 응답
+    _TRANSLATION_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "TRANSLATION429-LIMIT_EXCEEDED", "번역 횟수를 모두 사용했습니다."),
+    _TRANSLATION_IN_PROGRESS(HttpStatus.CONFLICT, "TRANSLATION409-IN_PROGRESS", "번역이 진행 중입니다. 잠시 후 다시 시도해주세요."),
+    _TRANSLATION_REQUEST_CONFLICT(HttpStatus.CONFLICT, "TRANSLATION409-REQUEST_CONFLICT", "다른 번역 요청에 사용된 요청 ID입니다."),
+    _TRANSLATION_UNAVAILABLE(
+            HttpStatus.SERVICE_UNAVAILABLE, "TRANSLATION503-UNAVAILABLE", "번역 상태를 확인할 수 없습니다. 같은 요청 ID로 다시 시도해주세요."),
+    _TRANSLATION_TEXT_REQUIRED(HttpStatus.BAD_REQUEST, "TRANSLATION400-TEXT_REQUIRED", "본문이 있는 텍스트 메시지만 번역할 수 있습니다."),
     _TRANSLATION_API_ERROR(
             HttpStatus.INTERNAL_SERVER_ERROR, "TRANSLATION500-API_ERROR", "번역 요청에 실패했습니다. 잠시 후 다시 시도해주세요."),
 
