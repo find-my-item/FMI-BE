@@ -1,6 +1,9 @@
 package com.fmi.domain.place.service;
 
 import com.fmi.domain.place.data.Place;
+import com.fmi.domain.place.data.PlaceBusinessHour;
+import com.fmi.domain.place.data.PlaceDailySchedule;
+import com.fmi.domain.place.data.PlaceManagementDetail;
 import com.fmi.domain.place.data.PlaceOperationPeriod;
 import com.fmi.domain.place.data.PlaceUpsertCommand;
 import com.fmi.domain.place.data.enums.PlaceType;
@@ -12,6 +15,7 @@ import com.fmi.global.apiPayload.exception.GeneralException;
 import com.fmi.global.dto.UploadedImage;
 import com.fmi.global.service.S3Service;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +59,45 @@ public class PlaceService {
                 .build();
         placeBusinessHourUpdater.update(place, command.dailySchedules(), LocalDateTime.now(clock));
         return placeRepository.save(place).getId();
+    }
+
+    public PlaceManagementDetail getForManagement(Long placeId) {
+        Place place =
+                placeRepository.findById(placeId).orElseThrow(() -> new GeneralException(PlaceErrorStatus.NOT_FOUND));
+        if (place.isDeleted()) {
+            throw new GeneralException(PlaceErrorStatus.NOT_FOUND);
+        }
+
+        List<PlaceBusinessHour> activeBusinessHours = place.getBusinessHours().stream()
+                .filter(PlaceBusinessHour::isActive)
+                .toList();
+        List<PlaceDailySchedule> dailySchedules = List.of(DayOfWeek.values()).stream()
+                .map(dayOfWeek -> {
+                    List<PlaceBusinessHour> businessHours = activeBusinessHours.stream()
+                            .filter(businessHour -> businessHour.getDayOfWeek() == dayOfWeek)
+                            .toList();
+                    return new PlaceDailySchedule(
+                            dayOfWeek,
+                            businessHours.get(0).isClosed(),
+                            businessHours.stream()
+                                    .map(PlaceBusinessHour::getTimeRange)
+                                    .toList());
+                })
+                .toList();
+        PlaceOperationPeriod operationPeriod = place.getOperationPeriod();
+        return new PlaceManagementDetail(
+                place.getId(),
+                place.getName(),
+                place.getAddress(),
+                place.getLatitude(),
+                place.getLongitude(),
+                place.getStation(),
+                place.getStationDistanceMeters(),
+                place.getType(),
+                place.getThumbnailUrl(),
+                operationPeriod == null ? null : operationPeriod.getStartDate(),
+                operationPeriod == null ? null : operationPeriod.getEndDate(),
+                dailySchedules);
     }
 
     @Transactional
