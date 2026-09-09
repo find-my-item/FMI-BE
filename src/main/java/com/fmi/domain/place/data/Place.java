@@ -12,6 +12,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
+import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -112,6 +113,22 @@ public class Place extends BaseEntity {
     public void addBusinessHour(PlaceBusinessHour businessHour) {
         businessHour.assignPlace(this);
         businessHours.add(businessHour);
+    }
+
+    public List<PlaceDailySchedule> dailySchedules() {
+        List<PlaceBusinessHour> activeBusinessHours =
+                businessHours.stream().filter(PlaceBusinessHour::isActive).toList();
+        return List.of(DayOfWeek.values()).stream()
+                .map(dayOfWeek -> {
+                    List<PlaceBusinessHour> hours = activeBusinessHours.stream()
+                            .filter(businessHour -> businessHour.getDayOfWeek() == dayOfWeek)
+                            .toList();
+                    return new PlaceDailySchedule(
+                            dayOfWeek,
+                            hours.get(0).isClosed(),
+                            hours.stream().map(PlaceBusinessHour::getTimeRange).toList());
+                })
+                .toList();
     }
 
     private void setOperationPeriod(PlaceOperationPeriod operationPeriod) {

@@ -15,22 +15,21 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.ActiveProfiles;
 import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Testcontainers
 @Import(IntegrationTestSupport.IntegrationTestConfiguration.class)
 public abstract class IntegrationTestSupport {
 
-    @ServiceConnection
-    @Container
-    protected static final MySQLContainer<?> MYSQL_CONTAINER = new MySQLContainer<>("mysql:8.4");
-
     @TestConfiguration
     static class IntegrationTestConfiguration {
+
+        @Bean
+        @ServiceConnection
+        MySQLContainer<?> mysqlContainer() {
+            return new MySQLContainer<>("mysql:8.4");
+        }
 
         @Bean
         @Primary

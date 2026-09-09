@@ -22,6 +22,8 @@ import com.fmi.global.dto.UploadedImage;
 import com.fmi.global.service.S3Service;
 import com.fmi.support.IntegrationTestSupport;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Arrays;
 import java.util.List;
@@ -31,6 +33,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 @DisplayName("PlaceService")
 class PlaceServiceTest extends IntegrationTestSupport {
@@ -56,7 +59,7 @@ class PlaceServiceTest extends IntegrationTestSupport {
         placeRepository.deleteAll();
         reset(s3Service);
         when(s3Service.uploadWithThumbnail(anyList())).thenAnswer(invocation -> {
-            List<org.springframework.web.multipart.MultipartFile> files = invocation.getArgument(0);
+            List<MultipartFile> files = invocation.getArgument(0);
             String filename = files.get(0).getOriginalFilename();
             return List.of(
                     new UploadedImage("https://storage.test/original-" + filename, "https://storage.test/" + filename));
@@ -189,8 +192,8 @@ class PlaceServiceTest extends IntegrationTestSupport {
                     "성수역",
                     320,
                     PlaceType.POPUP,
-                    java.time.LocalDate.of(2026, 9, 10),
-                    java.time.LocalDate.of(2026, 9, 20),
+                    LocalDate.of(2026, 9, 10),
+                    LocalDate.of(2026, 9, 20),
                     schedules);
 
             // when & then
@@ -218,8 +221,8 @@ class PlaceServiceTest extends IntegrationTestSupport {
                     "성수역",
                     320,
                     PlaceType.POPUP,
-                    java.time.LocalDate.of(2026, 9, 10),
-                    java.time.LocalDate.of(2026, 9, 20),
+                    LocalDate.of(2026, 9, 10),
+                    LocalDate.of(2026, 9, 20),
                     schedules);
             Long placeId = placeService.create(
                     original, new MockMultipartFile("thumbnail", "old.png", "image/png", new byte[] {1}));
@@ -235,8 +238,8 @@ class PlaceServiceTest extends IntegrationTestSupport {
                     "성수역",
                     320,
                     PlaceType.POPUP,
-                    java.time.LocalDate.of(2026, 9, 12),
-                    java.time.LocalDate.of(2026, 9, 25),
+                    LocalDate.of(2026, 9, 12),
+                    LocalDate.of(2026, 9, 25),
                     schedules);
 
             // when
@@ -246,8 +249,8 @@ class PlaceServiceTest extends IntegrationTestSupport {
             var operationPeriod =
                     placeOperationPeriodRepository.findByPlaceId(placeId).orElseThrow();
             assertThat(operationPeriod.getId()).isEqualTo(operationPeriodId);
-            assertThat(operationPeriod.getStartDate()).isEqualTo(java.time.LocalDate.of(2026, 9, 12));
-            assertThat(operationPeriod.getEndDate()).isEqualTo(java.time.LocalDate.of(2026, 9, 25));
+            assertThat(operationPeriod.getStartDate()).isEqualTo(LocalDate.of(2026, 9, 12));
+            assertThat(operationPeriod.getEndDate()).isEqualTo(LocalDate.of(2026, 9, 25));
         }
     }
 
@@ -277,7 +280,7 @@ class PlaceServiceTest extends IntegrationTestSupport {
             // then
             Place deleted = placeRepository.findById(placeId).orElseThrow();
             assertThat(deleted.getEntityStatus()).isEqualTo(EntityStatus.DELETED);
-            assertThat(deleted.getDeletedAt()).isEqualTo(java.time.LocalDateTime.of(2026, 9, 10, 12, 0));
+            assertThat(deleted.getDeletedAt()).isEqualTo(LocalDateTime.of(2026, 9, 10, 12, 0));
             assertThat(placeBusinessHourRepository.findAllByPlaceId(placeId))
                     .allMatch(businessHour -> businessHour.getEntityStatus() == EntityStatus.ACTIVE);
 

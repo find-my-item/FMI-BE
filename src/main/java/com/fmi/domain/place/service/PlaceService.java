@@ -1,24 +1,30 @@
 package com.fmi.domain.place.service;
 
 import com.fmi.domain.place.data.Place;
-import com.fmi.domain.place.data.PlaceBusinessHour;
-import com.fmi.domain.place.data.PlaceDailySchedule;
 import com.fmi.domain.place.data.PlaceManagementDetail;
 import com.fmi.domain.place.data.PlaceOperationPeriod;
+import com.fmi.domain.place.data.PlaceOperationState;
+import com.fmi.domain.place.data.PlaceSummary;
 import com.fmi.domain.place.data.PlaceUpsertCommand;
 import com.fmi.domain.place.data.enums.PlaceType;
 import com.fmi.domain.place.exception.PlaceErrorStatus;
+import com.fmi.domain.place.repository.PlaceFavoriteRepository;
 import com.fmi.domain.place.repository.PlaceRepository;
 import com.fmi.domain.place.service.internal.PlaceBusinessHourUpdater;
+import com.fmi.domain.place.service.internal.PlaceOperationStatusCalculator;
 import com.fmi.domain.place.service.internal.PlaceValidator;
+import com.fmi.domain.user.repository.UserRepository;
 import com.fmi.global.apiPayload.exception.GeneralException;
 import com.fmi.global.dto.UploadedImage;
 import com.fmi.global.service.S3Service;
 import java.time.Clock;
-import java.time.DayOfWeek;
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -29,8 +35,11 @@ import org.springframework.web.multipart.MultipartFile;
 public class PlaceService {
 
     private final PlaceRepository placeRepository;
+    private final PlaceFavoriteRepository placeFavoriteRepository;
+    private final UserRepository userRepository;
     private final PlaceValidator placeValidator;
     private final PlaceBusinessHourUpdater placeBusinessHourUpdater;
+    private final PlaceOperationStatusCalculator placeOperationStatusCalculator;
     private final S3Service s3Service;
     private final Clock clock;
 
@@ -68,22 +77,6 @@ public class PlaceService {
             throw new GeneralException(PlaceErrorStatus.NOT_FOUND);
         }
 
-        List<PlaceBusinessHour> activeBusinessHours = place.getBusinessHours().stream()
-                .filter(PlaceBusinessHour::isActive)
-                .toList();
-        List<PlaceDailySchedule> dailySchedules = List.of(DayOfWeek.values()).stream()
-                .map(dayOfWeek -> {
-                    List<PlaceBusinessHour> businessHours = activeBusinessHours.stream()
-                            .filter(businessHour -> businessHour.getDayOfWeek() == dayOfWeek)
-                            .toList();
-                    return new PlaceDailySchedule(
-                            dayOfWeek,
-                            businessHours.get(0).isClosed(),
-                            businessHours.stream()
-                                    .map(PlaceBusinessHour::getTimeRange)
-                                    .toList());
-                })
-                .toList();
         PlaceOperationPeriod operationPeriod = place.getOperationPeriod();
         return new PlaceManagementDetail(
                 place.getId(),
@@ -97,7 +90,47 @@ public class PlaceService {
                 place.getThumbnailUrl(),
                 operationPeriod == null ? null : operationPeriod.getStartDate(),
                 operationPeriod == null ? null : operationPeriod.getEndDate(),
-                dailySchedules);
+                place.dailySchedules());
+    }
+
+    public List<PlaceSummary> getHomePlaces(PlaceType type, String userEmail) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        List<Long> placeIds = placeRepository.findHomePlaceIds(type, now, PageRequest.of(0, 5));
+        if (placeIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<Place> places = placeRepository.findAllWithSchedulesByIdIn(placeIds);
+        places.sort(Comparator.comparingInt(place -> placeIds.indexOf(place.getId())));
+        Set<Long> favoritePlaceIds = new HashSet<>();
+        if (userEmail != null) {
+            userRepository
+                    .findByEmail(userEmail)
+                    .ifPresent(user -> favoritePlaceIds.addAll(
+                            placeFavoriteRepository.findFavoritePlaceIds(user.getId(), placeIds)));
+        }
+
+        return places.stream()
+                .map(place -> {
+                    PlaceOperationPeriod operationPeriod = place.getOperationPeriod();
+                    PlaceOperationState operationState = placeOperationStatusCalculator.calculate(
+                            place.getType(), operationPeriod, place.dailySchedules(), now);
+                    return new PlaceSummary(
+                            place.getId(),
+                            place.getName(),
+                            place.getAddress(),
+                            place.getLatitude(),
+                            place.getLongitude(),
+                            place.getStation(),
+                            place.getStationDistanceMeters(),
+                            place.getType(),
+                            place.getThumbnailUrl(),
+                            operationPeriod == null ? null : operationPeriod.getStartDate(),
+                            operationPeriod == null ? null : operationPeriod.getEndDate(),
+                            operationState,
+                            favoritePlaceIds.contains(place.getId()));
+                })
+                .toList();
     }
 
     @Transactional
