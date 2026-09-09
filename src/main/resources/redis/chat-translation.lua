@@ -1,4 +1,4 @@
-local quota, pending, request, cache = KEYS[1], KEYS[2], KEYS[3], KEYS[4]
+local quota, pending, request, cache, visit = KEYS[1], KEYS[2], KEYS[3], KEYS[4], KEYS[5]
 local operation, fingerprint, token = ARGV[1], ARGV[2], ARGV[3]
 local day, startAt, resetAt = ARGV[4], tonumber(ARGV[5]), tonumber(ARGV[6])
 local language, translated, limit = ARGV[7], ARGV[8], tonumber(ARGV[9])
@@ -46,6 +46,19 @@ if operation == 'reserve' then
         end
         return reply('IN_PROGRESS', used, active)
     end
+
+    local visitState = redis.call('HGET', visit, 'state')
+    if visitState == 'SUCCEEDED' then
+        local visitText = redis.call('HGET', visit, 'text')
+        local visitUsed = redis.call('HGET', visit, 'used')
+        local visitDay = redis.call('HGET', visit, 'day')
+        local visitReset = redis.call('HGET', visit, 'reset')
+        redis.call('HSET', request, 'state', 'SUCCEEDED', 'fingerprint', fingerprint,
+            'text', visitText, 'used', visitUsed, 'day', visitDay, 'reset', visitReset, 'language', language)
+        redis.call('PEXPIREAT', request, expiresAt)
+        return reply('SUCCEEDED', visitUsed, active, visitDay, visitReset, language, visitText)
+    end
+
     if used >= limit then return reply('LIMIT', used, active) end
     if used + active >= limit then return reply('IN_PROGRESS', used, active) end
     local deadline = now + 45000
@@ -79,6 +92,9 @@ if operation == 'complete' then
     redis.call('ZREM', pending, token)
     redis.call('HSET', request, 'state', 'SUCCEEDED', 'text', translated, 'used', tostring(used))
     redis.call('SET', cache, translated, 'PX', cacheTtl)
+    redis.call('HSET', visit, 'state', 'SUCCEEDED', 'text', translated, 'used', tostring(used),
+        'day', day, 'reset', tostring(resetAt))
+    redis.call('PEXPIREAT', visit, expiresAt)
     return reply('SUCCEEDED', used, redis.call('ZCARD', pending), day, resetAt, language, translated)
 end
 return reply('FAILED')

@@ -123,13 +123,18 @@ public class RedisTranslationQuotaStore {
         return prefix(ticket.userId()) + "msg:" + ticket.messageId() + ":" + ticket.language();
     }
 
+    private String visitKey(Ticket ticket) {
+        return prefix(ticket.userId()) + "fp:" + ticket.fingerprint();
+    }
+
     private Outcome execute(String operation, Ticket ticket, String text) {
         String prefix = prefix(ticket.userId());
         List<String> keys = List.of(
                 prefix + ticket.day() + ":used",
                 prefix + ticket.day() + ":pending",
                 prefix + "request:" + ticket.requestId(),
-                cacheKey(ticket));
+                cacheKey(ticket),
+                visitKey(ticket));
         Instant start = ticket.day().atStartOfDay(ZONE).toInstant();
         Instant reset = ticket.day().plusDays(1).atStartOfDay(ZONE).toInstant();
 

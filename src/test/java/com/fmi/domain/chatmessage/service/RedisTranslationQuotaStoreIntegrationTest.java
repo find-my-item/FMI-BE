@@ -405,6 +405,61 @@ class RedisTranslationQuotaStoreIntegrationTest {
     }
 
     @Nested
+    @DisplayName("같은 방문 내 재확인")
+    class SameVisitDeduplication {
+
+        @Test
+        @DisplayName("같은 방문·같은 메시지를 새 requestId로 다시 요청하면 차감 없이 이전 번역을 돌려준다")
+        void newRequestIdInSameVisitReplaysWithoutCharging() {
+            TranslateRequestDTO first = newRequest();
+            store.complete(store.reserve(source, ROOM_ID, MESSAGE_ID, first), TRANSLATED_TEXT);
+
+            TranslateRequestDTO second = new TranslateRequestDTO(UUID.randomUUID(), first.roomVisitId());
+            Outcome outcome = store.reserve(source, ROOM_ID, MESSAGE_ID, second).outcome();
+
+            assertThat(outcome.status()).isEqualTo(Status.SUCCEEDED);
+            assertThat(outcome.text()).isEqualTo(TRANSLATED_TEXT);
+            assertThat(store.usage(source.userId()).usedCount()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("실패 후 같은 방문에서 새 requestId로 재시도하면 정상적으로 차감한다")
+        void retryAfterFailureInSameVisitStillCharges() {
+            TranslateRequestDTO first = newRequest();
+            store.fail(store.reserve(source, ROOM_ID, MESSAGE_ID, first));
+
+            TranslateRequestDTO second = new TranslateRequestDTO(UUID.randomUUID(), first.roomVisitId());
+            store.complete(store.reserve(source, ROOM_ID, MESSAGE_ID, second), TRANSLATED_TEXT);
+
+            assertThat(store.usage(source.userId()).usedCount()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("같은 방문·같은 메시지라도 대상 언어가 다르면 다시 차감한다")
+        void differentTargetLanguageInSameVisitChargesAgain() {
+            TranslateRequestDTO first = newRequest();
+            store.complete(store.reserve(source, ROOM_ID, MESSAGE_ID, first), TRANSLATED_TEXT);
+
+            Source korean = new Source(source.userId(), ORIGINAL_TEXT, LanguageCode.KO);
+            TranslateRequestDTO second = new TranslateRequestDTO(UUID.randomUUID(), first.roomVisitId());
+            store.complete(store.reserve(korean, ROOM_ID, MESSAGE_ID, second), "지갑을 보셨나요");
+
+            assertThat(store.usage(source.userId()).usedCount()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("방을 재입장해 roomVisitId가 바뀌면 같은 메시지도 다시 차감한다")
+        void newVisitAfterReentryChargesAgain() {
+            TranslateRequestDTO first = newRequest();
+            store.complete(store.reserve(source, ROOM_ID, MESSAGE_ID, first), TRANSLATED_TEXT);
+
+            store.complete(reserve(), TRANSLATED_TEXT);
+
+            assertThat(store.usage(source.userId()).usedCount()).isEqualTo(2);
+        }
+    }
+
+    @Nested
     @DisplayName("Redis 응답 유실 복구")
     class LostReplyRecovery {
 
