@@ -105,6 +105,33 @@ class DeepLTranslationClientTest {
     }
 
     @Test
+    @DisplayName("200이지만 번역 결과가 공백뿐이면 GeneralException(TRANSLATION500-API_ERROR)을 던진다")
+    void throwsWhenTranslatedTextIsBlank() {
+        server.expect(requestTo(BASE_URL))
+                .andRespond(withSuccess("{\"translations\":[{\"text\":\" \"}]}", MediaType.APPLICATION_JSON));
+
+        assertTranslationApiError(() -> client.doTranslate("지갑", LanguageCode.EN));
+    }
+
+    @Test
+    @DisplayName("200이지만 번역 결과에 text 필드가 없으면 GeneralException(TRANSLATION500-API_ERROR)을 던진다")
+    void throwsWhenTranslatedTextIsMissing() {
+        server.expect(requestTo(BASE_URL))
+                .andRespond(withSuccess("{\"translations\":[{}]}", MediaType.APPLICATION_JSON));
+
+        assertTranslationApiError(() -> client.doTranslate("지갑", LanguageCode.EN));
+    }
+
+    @Test
+    @DisplayName("200이지만 translations 원소가 null이면 GeneralException(TRANSLATION500-API_ERROR)을 던진다")
+    void throwsWhenTranslationEntryIsNull() {
+        server.expect(requestTo(BASE_URL))
+                .andRespond(withSuccess("{\"translations\":[null]}", MediaType.APPLICATION_JSON));
+
+        assertTranslationApiError(() -> client.doTranslate("지갑", LanguageCode.EN));
+    }
+
+    @Test
     @DisplayName("500을 반환하면 RestClientException을 GeneralException(TRANSLATION500-API_ERROR)으로 변환한다")
     void throwsWhenServerRespondsWithError() {
         server.expect(requestTo(BASE_URL)).andRespond(withServerError());

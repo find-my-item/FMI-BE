@@ -3,6 +3,7 @@ package com.fmi.external.translation.client;
 import com.fmi.domain.Enum.LanguageCode;
 import com.fmi.global.apiPayload.code.status.ErrorStatus;
 import com.fmi.global.apiPayload.exception.GeneralException;
+import java.time.Duration;
 import java.util.List;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -22,7 +24,14 @@ import org.springframework.web.client.RestTemplate;
 public class DeepLTranslationClient implements TranslationClient {
 
     private final DeepLProperties deepLProperties;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = createRestTemplate();
+
+    private static RestTemplate createRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(3));
+        factory.setReadTimeout(Duration.ofSeconds(10));
+        return new RestTemplate(factory);
+    }
 
     @Override
     public String doTranslate(String text, LanguageCode targetLang) {
@@ -40,7 +49,12 @@ public class DeepLTranslationClient implements TranslationClient {
             DeepLResponse response =
                     restTemplate.postForObject(deepLProperties.baseUrl(), request, DeepLResponse.class);
 
-            if (response == null || response.translations == null || response.translations.isEmpty()) {
+            if (response == null
+                    || response.translations == null
+                    || response.translations.isEmpty()
+                    || response.translations.get(0) == null
+                    || response.translations.get(0).text == null
+                    || response.translations.get(0).text.isBlank()) {
                 throw new GeneralException(ErrorStatus._TRANSLATION_API_ERROR);
             }
 
