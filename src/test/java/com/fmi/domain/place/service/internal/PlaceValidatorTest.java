@@ -25,6 +25,29 @@ class PlaceValidatorTest {
     private final PlaceValidator validator = new PlaceValidator();
 
     @Nested
+    @DisplayName("장소 유형을 검증할 때")
+    class DescribeValidateType {
+        @Nested
+        @DisplayName("기존 유형과 요청 유형이 다르면")
+        class ContextWithDifferentType {
+            @Test
+            @DisplayName("INVALID_REQUEST 오류를 던진다")
+            void itThrowsInvalidRequest() {
+                // given
+                PlaceType currentType = PlaceType.CAFE;
+                PlaceType requestedType = PlaceType.POPUP;
+
+                // when
+                // then
+                assertThatThrownBy(() -> validator.validateType(currentType, requestedType))
+                        .isInstanceOf(GeneralException.class)
+                        .extracting(exception -> ((GeneralException) exception).getCode())
+                        .isEqualTo(PlaceErrorStatus.INVALID_REQUEST);
+            }
+        }
+    }
+
+    @Nested
     @DisplayName("운영 기간을 검증할 때")
     class DescribeValidateOperationPeriod {
         @Nested

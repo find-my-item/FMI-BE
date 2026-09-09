@@ -15,6 +15,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class PlaceValidator {
 
+    public void validateType(PlaceType currentType, PlaceType requestedType) {
+        if (currentType != requestedType) {
+            throw new GeneralException(PlaceErrorStatus.INVALID_REQUEST);
+        }
+    }
+
     public void validate(
             PlaceType placeType, PlaceOperationPeriod operationPeriod, List<PlaceDailySchedule> dailySchedules) {
         validateOperationPeriod(placeType, operationPeriod);
