@@ -7,6 +7,7 @@ import com.fmi.domain.chatmessage.service.ChatTranslationSourceService.Source;
 import com.fmi.domain.chatmessage.service.RedisTranslationQuotaStore.Outcome;
 import com.fmi.domain.chatmessage.service.RedisTranslationQuotaStore.Status;
 import com.fmi.domain.chatmessage.service.RedisTranslationQuotaStore.Ticket;
+import com.fmi.domain.chatmessage.service.RedisTranslationQuotaStore.Usage;
 import com.fmi.domain.chatmessage.web.dto.ChatTranslationRequest.TranslateRequestDTO;
 import java.net.ServerSocket;
 import java.nio.file.Path;
@@ -327,6 +328,26 @@ class RedisTranslationQuotaStoreIntegrationTest {
                     .isEqualTo(Status.SUCCEEDED);
             assertThat(store.usage(source.userId()).resetAt().atZone(ZONE).getHour())
                     .isZero();
+
+            // 확정 시점의 usage는 예약일(어제) 기준이라, usageAfterCompletion은 이를 그대로 쓰지 않고
+            // 오늘 사용량을 다시 조회해야 한다.
+            Usage refreshed = store.usageAfterCompletion(source.userId(), completed.usage());
+            assertThat(refreshed.usageDate()).isEqualTo(current.day());
+            assertThat(refreshed.usedCount()).isZero();
+        }
+
+        @Test
+        @DisplayName("usageAfterCompletion은 예약 당일이면 Redis를 다시 조회하지 않고 넘겨받은 값을 그대로 돌려준다")
+        void usageAfterCompletionSkipsRefetchOnSameDay() {
+            Outcome completed = store.complete(reserve(), TRANSLATED_TEXT);
+
+            // 다시 조회했다면 다른 값이 나오도록 실제 Redis 값을 조작해 둔다.
+            redis.opsForValue().set(keyPrefix() + completed.usage().usageDate() + ":used", "999");
+
+            Usage usage = store.usageAfterCompletion(source.userId(), completed.usage());
+
+            assertThat(usage).isEqualTo(completed.usage());
+            assertThat(usage.usedCount()).isEqualTo(1);
         }
     }
 

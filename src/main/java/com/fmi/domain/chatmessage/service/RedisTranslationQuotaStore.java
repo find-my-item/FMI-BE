@@ -68,6 +68,17 @@ public class RedisTranslationQuotaStore {
         throw new GeneralException(ErrorStatus._TRANSLATION_UNAVAILABLE);
     }
 
+    /**
+     * complete() 직후처럼 이미 확정 시점의 사용량을 들고 있을 때 쓴다. 예약일과 오늘이 같으면
+     * 그 값을 그대로 돌려주고, 자정을 넘겨 날짜가 달라졌을 때만 Redis를 다시 조회한다.
+     */
+    public Usage usageAfterCompletion(Long userId, Usage completedUsage) {
+        if (completedUsage.usageDate().equals(today())) {
+            return completedUsage;
+        }
+        return usage(userId);
+    }
+
     public Usage usage(Long userId) {
         for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             // 조회 전용이라 requestId·messageId·언어는 쓰이지 않는다.

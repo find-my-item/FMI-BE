@@ -102,7 +102,7 @@ class ChatTranslationServiceTest {
         @DisplayName("예약 → 번역 → 확정 순서로 진행하고, 성공하면 보상하지 않는다")
         void commitsQuotaOnlyAfterTranslationSucceeds() {
             Ticket ticket = givenReservation(Status.RESERVED);
-            given(translationQuotaStore.usage(USER_ID)).willReturn(usage);
+            given(translationQuotaStore.usageAfterCompletion(USER_ID, usage)).willReturn(usage);
             given(translationClient.translate(ORIGINAL_TEXT, LanguageCode.EN)).willReturn(TRANSLATED_TEXT);
             given(translationQuotaStore.complete(ticket, TRANSLATED_TEXT))
                     .willReturn(new Outcome(Status.SUCCEEDED, usage, LanguageCode.EN, TRANSLATED_TEXT));
@@ -120,7 +120,7 @@ class ChatTranslationServiceTest {
             order.verify(translationQuotaStore).reserve(source, ROOM_ID, MESSAGE_ID, request);
             order.verify(translationClient).translate(ORIGINAL_TEXT, LanguageCode.EN);
             order.verify(translationQuotaStore).complete(ticket, TRANSLATED_TEXT);
-            order.verify(translationQuotaStore).usage(USER_ID);
+            order.verify(translationQuotaStore).usageAfterCompletion(USER_ID, usage);
             verify(translationQuotaStore, never()).fail(any());
         }
 
@@ -133,7 +133,8 @@ class ChatTranslationServiceTest {
                     .willReturn(new Outcome(Status.SUCCEEDED, usage, LanguageCode.EN, TRANSLATED_TEXT));
             LocalDate today = usage.usageDate().plusDays(1);
             Instant nextReset = Instant.parse("2026-09-10T15:00:00Z");
-            given(translationQuotaStore.usage(USER_ID)).willReturn(new Usage(today, 0, 20, nextReset, true));
+            given(translationQuotaStore.usageAfterCompletion(USER_ID, usage))
+                    .willReturn(new Usage(today, 0, 20, nextReset, true));
 
             TranslationResponseDTO response = chatTranslationService.translate(ROOM_ID, MESSAGE_ID, EMAIL, request);
 
@@ -141,7 +142,7 @@ class ChatTranslationServiceTest {
             assertThat(response.usage()).isEqualTo(new UsageResponseDTO(today, 0, 20, nextReset, true));
             InOrder order = inOrder(translationQuotaStore);
             order.verify(translationQuotaStore).complete(ticket, TRANSLATED_TEXT);
-            order.verify(translationQuotaStore).usage(USER_ID);
+            order.verify(translationQuotaStore).usageAfterCompletion(USER_ID, usage);
             verify(translationQuotaStore, never()).fail(any());
         }
 
@@ -152,9 +153,8 @@ class ChatTranslationServiceTest {
             given(translationClient.translate(ORIGINAL_TEXT, LanguageCode.EN)).willReturn(TRANSLATED_TEXT);
             Outcome succeeded = new Outcome(Status.SUCCEEDED, usage, LanguageCode.EN, TRANSLATED_TEXT);
             given(translationQuotaStore.complete(ticket, TRANSLATED_TEXT)).willReturn(succeeded);
-            given(translationQuotaStore.usage(USER_ID))
-                    .willThrow(new GeneralException(ErrorStatus._TRANSLATION_UNAVAILABLE))
-                    .willReturn(usage);
+            given(translationQuotaStore.usageAfterCompletion(USER_ID, usage))
+                    .willThrow(new GeneralException(ErrorStatus._TRANSLATION_UNAVAILABLE));
 
             assertFailsWith(ErrorStatus._TRANSLATION_UNAVAILABLE);
 
@@ -169,6 +169,7 @@ class ChatTranslationServiceTest {
                     succeeded);
             given(translationQuotaStore.reserve(source, ROOM_ID, MESSAGE_ID, request))
                     .willReturn(replay);
+            given(translationQuotaStore.usage(USER_ID)).willReturn(usage);
 
             TranslationResponseDTO response = chatTranslationService.translate(ROOM_ID, MESSAGE_ID, EMAIL, request);
 
@@ -293,7 +294,7 @@ class ChatTranslationServiceTest {
         @DisplayName("이미 번역해 둔 메시지는 DeepL을 부르지 않고 보관된 번역으로 확정한다")
         void reusesCachedTranslationInsteadOfCallingDeepL() {
             Ticket ticket = givenReservation(Status.RESERVED);
-            given(translationQuotaStore.usage(USER_ID)).willReturn(usage);
+            given(translationQuotaStore.usageAfterCompletion(USER_ID, usage)).willReturn(usage);
             given(translationQuotaStore.findCached(ticket)).willReturn(Optional.of(TRANSLATED_TEXT));
             given(translationQuotaStore.complete(ticket, TRANSLATED_TEXT))
                     .willReturn(new Outcome(Status.SUCCEEDED, usage, LanguageCode.EN, TRANSLATED_TEXT));
@@ -311,7 +312,7 @@ class ChatTranslationServiceTest {
         @DisplayName("보관된 번역이 없으면 DeepL을 호출한다")
         void callsDeepLWhenNothingIsCached() {
             Ticket ticket = givenReservation(Status.RESERVED);
-            given(translationQuotaStore.usage(USER_ID)).willReturn(usage);
+            given(translationQuotaStore.usageAfterCompletion(USER_ID, usage)).willReturn(usage);
             given(translationQuotaStore.findCached(ticket)).willReturn(Optional.empty());
             given(translationClient.translate(ORIGINAL_TEXT, LanguageCode.EN)).willReturn(TRANSLATED_TEXT);
             given(translationQuotaStore.complete(ticket, TRANSLATED_TEXT))

@@ -46,7 +46,8 @@ public class ChatTranslationService {
         if (outcome.status() != Status.SUCCEEDED) {
             throw toException(outcome);
         }
-        return toResponse(messageId, request, outcome, translationQuotaStore.usage(source.userId()));
+        Usage usage = translationQuotaStore.usageAfterCompletion(source.userId(), outcome.usage());
+        return toResponse(messageId, request, outcome, usage);
     }
 
     public UsageResponseDTO usage(String email) {
