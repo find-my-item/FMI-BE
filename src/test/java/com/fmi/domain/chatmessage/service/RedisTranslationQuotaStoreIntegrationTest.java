@@ -1,20 +1,13 @@
 package com.fmi.domain.chatmessage.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fmi.domain.Enum.LanguageCode;
 import com.fmi.domain.chatmessage.service.ChatTranslationSourceService.Source;
 import com.fmi.domain.chatmessage.service.RedisTranslationQuotaStore.Outcome;
 import com.fmi.domain.chatmessage.service.RedisTranslationQuotaStore.Status;
 import com.fmi.domain.chatmessage.service.RedisTranslationQuotaStore.Ticket;
 import com.fmi.domain.chatmessage.web.dto.ChatTranslationRequest.TranslateRequestDTO;
-import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.data.redis.RedisConnectionFailureException;
-import org.springframework.data.redis.connection.RedisConnection;
-import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.RedisScript;
-
 import java.net.ServerSocket;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -25,8 +18,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.*;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 
 /**
  * 실제 redis-server 프로세스를 띄워 Lua 스크립트의 원자성을 검증한다.
