@@ -1,0 +1,127 @@
+spring:
+  application:
+    name: fmi-test
+  datasource:
+    url: jdbc:mysql://localhost:13306/test-fmi?characterEncoding=UTF-8&serverTimezone=Asia/Seoul&rewriteBatchedStatements=true
+    username: test-user
+    password: test-password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    show-sql: false
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+  flyway:
+    enabled: false
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: localhost
+      port: 16379
+      timeout: 2000
+  mail:
+    host: localhost
+    port: 1025
+    username: test-mail-user
+    password: test-mail-password
+    test-mode: true
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+            required: false
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  cloud:
+    aws:
+      credentials:
+        access-key: test-access-key
+        secret-key: test-secret-key
+      region:
+        static: ap-northeast-2
+        auto: false
+      s3:
+        bucket: test-bucket
+
+server:
+  port: 18080
+  forward-headers-strategy: framework
+
+management:
+  tracing:
+    sampling:
+      probability: 0.0
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    tags:
+      application: fmi-test
+      env: test
+
+logging:
+  level:
+    org.hibernate.SQL: info
+    org.hibernate.orm.jdbc.bind: info
+    org.springframework.web: info
+    com.fmi.domain.chatmessage: info
+
+cors:
+  allowed-origin-patterns:
+    - "http://localhost:13000"
+    - "http://127.0.0.1:13000"
+
+jwt:
+  secret: test-jwt-secret-key-with-at-least-32-bytes
+  issuer: fmi-test
+  access-token-validity-ms: 900000
+  refresh-token-validity-ms: 1209600000
+  cookie:
+    name: test_refresh_token
+    secure: false
+    same-site: Lax
+    parent-domain: test.localhost
+
+slack:
+  webhook:
+    inquiry-url: http://localhost:18080/slack/inquiry
+    report-url: http://localhost:18080/slack/report
+
+translation:
+  deepl:
+    api-key: test-deepl-api-key
+    base-url: http://localhost:18080/deepl/translate
+
+oauth:
+  kakao:
+    client-id: test-kakao-client-id
+    client-secret: test-kakao-client-secret
+    admin-key: test-kakao-admin-key
+    redirect-uris:
+      dev: http://localhost:13000/oauth/kakao/dev
+      release: http://localhost:13000/oauth/kakao/release
+  apple:
+    team-id: test-apple-team-id
+    client-id: test-apple-client-id
+    key-id: test-apple-key-id
+    private-key-base64: dGVzdC1wcml2YXRlLWtleQ==
+    redirect-uris:
+      dev: http://localhost:13000/oauth/apple/dev
+      release: http://localhost:13000/oauth/apple/release
