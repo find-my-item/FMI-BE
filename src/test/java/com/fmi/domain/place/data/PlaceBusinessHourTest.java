@@ -16,9 +16,7 @@ class PlaceBusinessHourTest {
         PlaceBusinessHour hour = PlaceBusinessHour.builder()
                 .dayOfWeek(DayOfWeek.MONDAY)
                 .closed(false)
-                .type(PlaceBusinessHourType.BUSINESS)
-                .startTime(LocalTime.NOON)
-                .endTime(LocalTime.of(18, 0))
+                .timeRange(new PlaceTimeRange(PlaceBusinessHourType.BUSINESS, LocalTime.NOON, LocalTime.of(18, 0)))
                 .build();
         hour.reviseClosed(true);
         assertThat(hour.isClosed()).isTrue();

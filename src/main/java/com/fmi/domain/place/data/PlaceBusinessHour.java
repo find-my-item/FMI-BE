@@ -1,8 +1,8 @@
 package com.fmi.domain.place.data;
 
-import com.fmi.domain.place.data.enums.PlaceBusinessHourType;
 import com.fmi.global.data.BaseEntity;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -13,7 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import java.time.DayOfWeek;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -39,24 +39,14 @@ public class PlaceBusinessHour extends BaseEntity {
     @Column(name = "is_closed", nullable = false)
     private boolean closed;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false, length = 20)
-    private PlaceBusinessHourType type;
-
-    @Column(name = "start_time", nullable = false)
-    private LocalTime startTime;
-
-    @Column(name = "end_time", nullable = false)
-    private LocalTime endTime;
+    @Embedded
+    private PlaceTimeRange timeRange;
 
     @Builder
-    private PlaceBusinessHour(
-            DayOfWeek dayOfWeek, boolean closed, PlaceBusinessHourType type, LocalTime startTime, LocalTime endTime) {
+    private PlaceBusinessHour(DayOfWeek dayOfWeek, boolean closed, PlaceTimeRange timeRange) {
         this.dayOfWeek = dayOfWeek;
         this.closed = closed;
-        this.type = type;
-        this.startTime = startTime;
-        this.endTime = endTime;
+        this.timeRange = timeRange;
     }
 
     void assignPlace(Place place) {
@@ -65,5 +55,17 @@ public class PlaceBusinessHour extends BaseEntity {
 
     public void reviseClosed(boolean closed) {
         this.closed = closed;
+    }
+
+    public boolean hasSameRange(DayOfWeek dayOfWeek, PlaceTimeRange timeRange) {
+        return this.dayOfWeek == dayOfWeek && this.timeRange.equals(timeRange);
+    }
+
+    public boolean delete(LocalDateTime deletedAt) {
+        return super.delete(deletedAt);
+    }
+
+    public boolean restore() {
+        return super.active();
     }
 }
