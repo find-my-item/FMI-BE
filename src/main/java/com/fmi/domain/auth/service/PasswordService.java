@@ -35,10 +35,9 @@ public class PasswordService {
     public void verify(String email, PasswordVerifyRequest request) {
         User user =
                 userRepository.findByEmail(email).orElseThrow(() -> new GeneralException(ErrorStatus._USER_NOT_FOUND));
-        PasswordValidator.CurrentPasswordValidationResult validationResult =
-                passwordValidator.validateCurrentPassword(user, request.getCurrentPassword());
-
-        if (validationResult == PasswordValidator.CurrentPasswordValidationResult.FAILED) {
+        boolean matchesPassword = passwordValidator.matchesTemporaryPassword(user, request.getCurrentPassword())
+                || passwordValidator.matchesPermanentPassword(user, request.getCurrentPassword());
+        if (!matchesPassword) {
             throw new GeneralException(ErrorStatus._CURRENT_PASSWORD_INCORRECT);
         }
     }

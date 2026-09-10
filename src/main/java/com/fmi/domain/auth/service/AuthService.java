@@ -101,15 +101,11 @@ public class AuthService {
                 .findByEmail(email)
                 .orElseThrow(() -> new GeneralException(ErrorStatus._INVALID_CREDENTIALS));
 
-        PasswordValidator.CurrentPasswordValidationResult validationResult =
-                passwordValidator.validateCurrentPassword(user, rawPassword);
-
-        if (validationResult == PasswordValidator.CurrentPasswordValidationResult.FAILED) {
+        boolean isTemporaryPassword = passwordValidator.matchesTemporaryPassword(user, rawPassword);
+        if (!isTemporaryPassword && !passwordValidator.matchesPermanentPassword(user, rawPassword)) {
             throw new GeneralException(ErrorStatus._INVALID_CREDENTIALS);
         }
-
-        return new AuthenticateResult(
-                user, validationResult == PasswordValidator.CurrentPasswordValidationResult.TEMPORARY);
+        return new AuthenticateResult(user, isTemporaryPassword);
     }
 
     /**

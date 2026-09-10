@@ -26,34 +26,20 @@ public class PasswordValidator {
         }
     }
 
-    public CurrentPasswordValidationResult validateCurrentPassword(User user, String rawPassword) {
+    public boolean matchesTemporaryPassword(User user, String rawPassword) {
         LocalDateTime now = LocalDateTime.now(clock);
-
-        if (user.hasActiveTemporaryPassword(now)) {
-            if (passwordEncoder.matches(rawPassword, user.getTemporaryPassword())) {
-                return CurrentPasswordValidationResult.TEMPORARY;
-            }
-            if (user.getOriginalPassword() != null
-                    && passwordEncoder.matches(rawPassword, user.getOriginalPassword())) {
-                return CurrentPasswordValidationResult.STANDARD;
-            }
-            return CurrentPasswordValidationResult.FAILED;
-        }
-
-        if (user.hasExpiredTemporaryPassword(now)) {
-            boolean matchesOriginal = user.getOriginalPassword() != null
-                    && passwordEncoder.matches(rawPassword, user.getOriginalPassword());
-            return matchesOriginal ? CurrentPasswordValidationResult.STANDARD : CurrentPasswordValidationResult.FAILED;
-        }
-
-        return passwordEncoder.matches(rawPassword, user.getPassword())
-                ? CurrentPasswordValidationResult.STANDARD
-                : CurrentPasswordValidationResult.FAILED;
+        return user.hasActiveTemporaryPassword(now)
+                && passwordEncoder.matches(rawPassword, user.getTemporaryPassword());
     }
 
-    public enum CurrentPasswordValidationResult {
-        STANDARD,
-        TEMPORARY,
-        FAILED
+    public boolean matchesPermanentPassword(User user, String rawPassword) {
+        LocalDateTime now = LocalDateTime.now(clock);
+
+        if (user.hasActiveTemporaryPassword(now) || user.hasExpiredTemporaryPassword(now)) {
+            return user.getOriginalPassword() != null
+                    && passwordEncoder.matches(rawPassword, user.getOriginalPassword());
+        }
+
+        return passwordEncoder.matches(rawPassword, user.getPassword());
     }
 }
