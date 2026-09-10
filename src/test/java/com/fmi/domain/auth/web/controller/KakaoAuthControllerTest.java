@@ -6,8 +6,9 @@ import static org.mockito.Mockito.when;
 
 import com.fmi.domain.Enum.Provider;
 import com.fmi.domain.Enum.Role;
+import com.fmi.domain.auth.data.IssuedTokens;
 import com.fmi.domain.auth.service.SocialLoginService;
-import com.fmi.domain.auth.service.TokenIssuer;
+import com.fmi.domain.auth.service.TokenService;
 import com.fmi.domain.auth.web.dto.KakaoLoginRequest;
 import com.fmi.domain.auth.web.response.LoginResponse;
 import com.fmi.domain.user.data.User;
@@ -39,7 +40,7 @@ class KakaoAuthControllerTest {
     private SocialLoginService socialLoginService;
 
     @Mock
-    private TokenIssuer tokenIssuer;
+    private TokenService tokenService;
 
     @Mock
     private AuthCookieFactory authCookieFactory;
@@ -83,9 +84,9 @@ class KakaoAuthControllerTest {
                 when(kakaoOAuthService.getUserInfo("kakao-access-token")).thenReturn(kakaoUser);
                 when(socialLoginService.upsertUserFromKakao(100L, email, "카카오토끼", "https://example.com/profile.png"))
                         .thenReturn(new SocialLoginService.KakaoLoginResult(localUser));
-                when(tokenIssuer.issue(localUser, false, Provider.KAKAO))
-                        .thenReturn(new TokenIssuer.IssuedTokens(
-                                "access-token", accessExpiration, "refresh-token", refreshExpiration));
+                when(tokenService.issue(localUser, false, Provider.KAKAO))
+                        .thenReturn(
+                                new IssuedTokens("access-token", accessExpiration, "refresh-token", refreshExpiration));
                 when(authCookieFactory.createAccessCookie(httpRequest, "access-token", accessExpiration))
                         .thenReturn(ResponseCookie.from("access_token", "access-token")
                                 .build());
@@ -98,7 +99,7 @@ class KakaoAuthControllerTest {
                         kakaoAuthController.loginWithKakao(request, httpRequest);
 
                 // then
-                verify(tokenIssuer).issue(localUser, false, Provider.KAKAO);
+                verify(tokenService).issue(localUser, false, Provider.KAKAO);
                 assertThat(response.getStatusCode().value()).isEqualTo(200);
                 assertThat(response.getHeaders().get("Set-Cookie"))
                         .containsExactly("access_token=access-token", "refresh_token=refresh-token");

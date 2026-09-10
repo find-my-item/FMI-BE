@@ -5,8 +5,9 @@ import static org.mockito.Mockito.when;
 
 import com.fmi.domain.Enum.Provider;
 import com.fmi.domain.Enum.Role;
+import com.fmi.domain.auth.data.IssuedTokens;
 import com.fmi.domain.auth.service.SocialLoginService;
-import com.fmi.domain.auth.service.TokenIssuer;
+import com.fmi.domain.auth.service.TokenService;
 import com.fmi.domain.auth.web.dto.AppleLoginRequest;
 import com.fmi.domain.auth.web.response.LoginResponse;
 import com.fmi.domain.user.data.User;
@@ -35,7 +36,7 @@ class AppleAuthControllerTest {
     private SocialLoginService socialLoginService;
 
     @Mock
-    private TokenIssuer tokenIssuer;
+    private TokenService tokenService;
 
     @Mock
     private AuthCookieFactory authCookieFactory;
@@ -58,9 +59,8 @@ class AppleAuthControllerTest {
                 .thenReturn(new SocialLoginService.AppleLoginResult(user));
         Date accessExpiration = Date.from(Instant.now().plusSeconds(900));
         Date refreshExpiration = Date.from(Instant.now().plusSeconds(1_200));
-        when(tokenIssuer.issue(user, false, Provider.APPLE))
-                .thenReturn(new TokenIssuer.IssuedTokens(
-                        "access-token", accessExpiration, "refresh-token", refreshExpiration));
+        when(tokenService.issue(user, false, Provider.APPLE))
+                .thenReturn(new IssuedTokens("access-token", accessExpiration, "refresh-token", refreshExpiration));
         when(authCookieFactory.createAccessCookie(httpRequest, "access-token", accessExpiration))
                 .thenReturn(ResponseCookie.from("access_token", "access-token").build());
         when(authCookieFactory.createRefreshCookie(httpRequest, "refresh-token", refreshExpiration))
@@ -71,7 +71,7 @@ class AppleAuthControllerTest {
         ResponseEntity<ApiResponse<LoginResponse>> response = appleAuthController.loginWithApple(request, httpRequest);
 
         // then
-        verify(tokenIssuer).issue(user, false, Provider.APPLE);
+        verify(tokenService).issue(user, false, Provider.APPLE);
         SoftAssertions.assertSoftly(softly -> {
             softly.assertThat(response.getStatusCode().value()).isEqualTo(200);
             softly.assertThat(response.getHeaders().get("Set-Cookie"))

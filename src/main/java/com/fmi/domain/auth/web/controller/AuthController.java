@@ -1,9 +1,10 @@
 package com.fmi.domain.auth.web.controller;
 
 import com.fmi.domain.auth.converter.AuthConverter;
+import com.fmi.domain.auth.data.IssuedTokens;
 import com.fmi.domain.auth.service.AuthService;
 import com.fmi.domain.auth.service.PasswordService;
-import com.fmi.domain.auth.service.TokenIssuer;
+import com.fmi.domain.auth.service.TokenService;
 import com.fmi.domain.auth.service.WithdrawalService;
 import com.fmi.domain.auth.web.dto.AccountDeleteRequest;
 import com.fmi.domain.auth.web.dto.LoginRequest;
@@ -15,6 +16,8 @@ import com.fmi.domain.auth.web.swagger.AuthSwagger;
 import com.fmi.domain.user.service.NicknameService;
 import com.fmi.domain.user.web.response.CheckResponse;
 import com.fmi.global.apiPayload.ApiResponse;
+import com.fmi.global.apiPayload.code.status.ErrorStatus;
+import com.fmi.global.apiPayload.exception.GeneralException;
 import com.fmi.security.AuthCookieFactory;
 import com.fmi.security.AuthCookieResolver;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,7 +36,7 @@ public class AuthController implements AuthSwagger {
 
     private final AuthService authService;
     private final NicknameService nicknameService;
-    private final TokenIssuer tokenIssuer;
+    private final TokenService tokenService;
     private final PasswordService passwordService;
     private final WithdrawalService withdrawalService;
     private final AuthCookieFactory authCookieFactory;
@@ -65,20 +68,11 @@ public class AuthController implements AuthSwagger {
     @PostMapping("/auth/refresh")
     @Override
     public ResponseEntity<ApiResponse<LoginResponse>> refresh(HttpServletRequest request) {
-        String refreshJwt = authCookieResolver.findRefreshToken(request).orElse(null);
-        if (refreshJwt == null || refreshJwt.isEmpty()) {
-            return ResponseEntity.status(401)
-                    .body(ApiResponse.onFailure("AUTH401-INVALID_REFRESH", "리프레시 토큰 없음", null));
-        }
-
-        TokenIssuer.RefreshResult refreshResult = tokenIssuer.refresh(refreshJwt);
-        if (!refreshResult.isSuccess()) {
-            return ResponseEntity.status(401)
-                    .body(ApiResponse.onFailure(
-                            "AUTH401-INVALID_REFRESH", refreshFailureMessage(refreshResult.failure()), null));
-        }
-
-        TokenIssuer.IssuedTokens issuedTokens = refreshResult.issuedTokens();
+        String refreshJwt = authCookieResolver
+                .findRefreshToken(request)
+                .filter(token -> !token.isEmpty())
+                .orElseThrow(() -> new GeneralException(ErrorStatus._REFRESH_TOKEN_NOT_FOUND));
+        IssuedTokens issuedTokens = tokenService.refresh(refreshJwt);
 
         ResponseCookie accessCookie = authCookieFactory.createAccessCookie(
                 request, issuedTokens.accessToken(), issuedTokens.accessExpiration());
@@ -93,7 +87,7 @@ public class AuthController implements AuthSwagger {
 
     private ResponseEntity<ApiResponse<LoginResponse>> buildTokenResponse(
             HttpServletRequest request, com.fmi.domain.user.data.User user, boolean isTemporaryPassword) {
-        TokenIssuer.IssuedTokens issuedTokens = tokenIssuer.issue(user, isTemporaryPassword, null);
+        IssuedTokens issuedTokens = tokenService.issue(user, isTemporaryPassword, null);
 
         ResponseCookie accessCookie = authCookieFactory.createAccessCookie(
                 request, issuedTokens.accessToken(), issuedTokens.accessExpiration());
@@ -109,10 +103,10 @@ public class AuthController implements AuthSwagger {
     @PostMapping("/auth/logout")
     @Override
     public ResponseEntity<ApiResponse<String>> logout(HttpServletRequest request) {
-        String refreshJwt = authCookieResolver.findRefreshToken(request).orElse(null);
-        if (refreshJwt != null && !refreshJwt.isEmpty()) {
-            tokenIssuer.revokeIfValid(refreshJwt);
-        }
+        authCookieResolver
+                .findRefreshToken(request)
+                .filter(token -> !token.isEmpty())
+                .ifPresent(tokenService::revoke);
 
         ResponseCookie accessCookie = authCookieFactory.expireAccessCookie(request);
         ResponseCookie refreshCookie = authCookieFactory.expireRefreshCookie(request);
@@ -149,14 +143,5 @@ public class AuthController implements AuthSwagger {
                 .header("Set-Cookie", accessCookie.toString())
                 .header("Set-Cookie", refreshCookie.toString())
                 .body(ApiResponse.onSuccess(null));
-    }
-
-    private static String refreshFailureMessage(TokenIssuer.RefreshFailure failure) {
-        return switch (failure) {
-            case INVALID_TOKEN -> "유효하지 않은 리프레시";
-            case MISSING_JTI -> "유효하지 않은 리프레시(jti 없음)";
-            case HASH_MISMATCH -> "유효하지 않은 리프레시(대조 실패)";
-            case USER_NOT_FOUND -> "유효하지 않은 리프레시(사용자 없음)";
-        };
     }
 }

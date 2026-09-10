@@ -1,15 +1,20 @@
 package com.fmi.domain.auth.web.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fmi.domain.Enum.Role;
 import com.fmi.domain.Enum.WithdrawalReason;
+import com.fmi.domain.auth.data.IssuedTokens;
 import com.fmi.domain.auth.service.AuthService;
 import com.fmi.domain.auth.service.PasswordService;
-import com.fmi.domain.auth.service.TokenIssuer;
+import com.fmi.domain.auth.service.TokenService;
 import com.fmi.domain.auth.service.WithdrawalService;
 import com.fmi.domain.auth.web.dto.AccountDeleteRequest;
 import com.fmi.domain.auth.web.dto.LoginRequest;
@@ -19,18 +24,21 @@ import com.fmi.domain.auth.web.response.LoginResponse;
 import com.fmi.domain.user.data.User;
 import com.fmi.domain.user.service.NicknameService;
 import com.fmi.global.apiPayload.ApiResponse;
+import com.fmi.global.apiPayload.code.status.ErrorStatus;
+import com.fmi.global.apiPayload.exception.ExceptionAdvice;
+import com.fmi.global.apiPayload.exception.GeneralException;
 import com.fmi.security.AuthCookieFactory;
 import com.fmi.security.AuthCookieResolver;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -38,6 +46,8 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -52,7 +62,7 @@ class AuthControllerTest {
     private NicknameService nicknameService;
 
     @Mock
-    private TokenIssuer tokenIssuer;
+    private TokenService tokenService;
 
     @Mock
     private PasswordService passwordService;
@@ -72,6 +82,15 @@ class AuthControllerTest {
     @InjectMocks
     private AuthController authController;
 
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUpMockMvc() {
+        mockMvc = MockMvcBuilders.standaloneSetup(authController)
+                .setControllerAdvice(new ExceptionAdvice())
+                .build();
+    }
+
     @Nested
     @DisplayName("토큰 갱신")
     class Refresh {
@@ -81,43 +100,44 @@ class AuthControllerTest {
         class WithoutRefreshCookie {
 
             @Test
-            @DisplayName("기존 오류 코드와 메시지로 401 응답을 반환한다")
-            void returnsUnauthorizedResponse() {
+            @DisplayName("ExceptionAdvice가 기존 오류 코드와 메시지로 401 응답을 반환한다")
+            void returnsUnauthorizedResponse() throws Exception {
                 // given
-                MockHttpServletRequest request = new MockHttpServletRequest();
-                when(authCookieResolver.findRefreshToken(request)).thenReturn(Optional.empty());
+                when(authCookieResolver.findRefreshToken(any(HttpServletRequest.class)))
+                        .thenReturn(Optional.empty());
 
                 // when
-                ResponseEntity<ApiResponse<LoginResponse>> response = authController.refresh(request);
-
-                // then
-                assertThat(response.getStatusCode().value()).isEqualTo(401);
-                assertThat(response.getBody().getCode()).isEqualTo("AUTH401-INVALID_REFRESH");
-                assertThat(response.getBody().getMessage()).isEqualTo("리프레시 토큰 없음");
-                verifyNoInteractions(tokenIssuer);
+                mockMvc.perform(post("/auth/refresh"))
+                        // then
+                        .andExpect(status().isUnauthorized())
+                        .andExpect(jsonPath("$.isSuccess").value(false))
+                        .andExpect(jsonPath("$.code").value("AUTH401-INVALID_REFRESH"))
+                        .andExpect(jsonPath("$.message").value("리프레시 토큰이 없습니다."));
+                verifyNoInteractions(tokenService);
             }
         }
 
         @Nested
-        @DisplayName("TokenIssuer가 갱신에 실패하면")
+        @DisplayName("TokenService가 갱신에 실패하면")
         class WithRefreshFailure {
 
-            @ParameterizedTest
-            @EnumSource(TokenIssuer.RefreshFailure.class)
-            @DisplayName("기존 오류 메시지로 401 응답을 반환한다")
-            void returnsExistingFailureMessage(TokenIssuer.RefreshFailure failure) {
+            @Test
+            @DisplayName("ExceptionAdvice가 내부 실패 원인을 숨긴 오류 메시지로 401 응답을 반환한다")
+            void returnsInvalidRefreshResponse() throws Exception {
                 // given
                 String refreshToken = "refresh-token";
-                MockHttpServletRequest request = new MockHttpServletRequest();
-                when(authCookieResolver.findRefreshToken(request)).thenReturn(Optional.of(refreshToken));
-                when(tokenIssuer.refresh(refreshToken)).thenReturn(new TokenIssuer.RefreshResult(null, failure));
+                when(authCookieResolver.findRefreshToken(any(HttpServletRequest.class)))
+                        .thenReturn(Optional.of(refreshToken));
+                when(tokenService.refresh(refreshToken))
+                        .thenThrow(new GeneralException(ErrorStatus._INVALID_REFRESH_TOKEN));
 
                 // when
-                ResponseEntity<ApiResponse<LoginResponse>> response = authController.refresh(request);
-
-                // then
-                assertThat(response.getStatusCode().value()).isEqualTo(401);
-                assertThat(response.getBody().getMessage()).isEqualTo(refreshFailureMessage(failure));
+                mockMvc.perform(post("/auth/refresh"))
+                        // then
+                        .andExpect(status().isUnauthorized())
+                        .andExpect(jsonPath("$.isSuccess").value(false))
+                        .andExpect(jsonPath("$.code").value("AUTH401-INVALID_REFRESH"))
+                        .andExpect(jsonPath("$.message").value("리프레시 토큰이 유효하지 않습니다."));
             }
         }
 
@@ -137,11 +157,9 @@ class AuthControllerTest {
                 Date refreshExpiration = Date.from(Instant.now().plusSeconds(1_200));
 
                 when(authCookieResolver.findRefreshToken(request)).thenReturn(Optional.of(oldRefreshToken));
-                when(tokenIssuer.refresh(oldRefreshToken))
-                        .thenReturn(new TokenIssuer.RefreshResult(
-                                new TokenIssuer.IssuedTokens(
-                                        newAccessToken, accessExpiration, newRefreshToken, refreshExpiration),
-                                null));
+                when(tokenService.refresh(oldRefreshToken))
+                        .thenReturn(
+                                new IssuedTokens(newAccessToken, accessExpiration, newRefreshToken, refreshExpiration));
                 when(authCookieFactory.createAccessCookie(request, newAccessToken, accessExpiration))
                         .thenReturn(accessCookie(newAccessToken));
                 when(authCookieFactory.createRefreshCookie(request, newRefreshToken, refreshExpiration))
@@ -151,7 +169,7 @@ class AuthControllerTest {
                 ResponseEntity<ApiResponse<LoginResponse>> response = authController.refresh(request);
 
                 // then
-                verify(tokenIssuer).refresh(oldRefreshToken);
+                verify(tokenService).refresh(oldRefreshToken);
                 assertThat(response.getStatusCode().value()).isEqualTo(200);
                 assertThat(response.getHeaders().get("Set-Cookie"))
                         .containsExactly("access_token=" + newAccessToken, "refresh_token=" + newRefreshToken);
@@ -193,7 +211,52 @@ class AuthControllerTest {
                                 "access_token=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
                                 "refresh_token=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
                 assertThat(response.getBody().getResult()).isEqualTo("OK");
-                verifyNoInteractions(tokenIssuer);
+                verifyNoInteractions(tokenService);
+            }
+        }
+
+        @Nested
+        @DisplayName("갱신 토큰 쿠키 값이 비어 있으면")
+        class WithEmptyRefreshCookie {
+
+            @Test
+            @DisplayName("토큰을 폐기하지 않고 성공 응답을 반환한다")
+            void doesNotRevokeToken() {
+                // given
+                MockHttpServletRequest request = new MockHttpServletRequest();
+                when(authCookieResolver.findRefreshToken(request)).thenReturn(Optional.of(""));
+                when(authCookieFactory.expireAccessCookie(request)).thenReturn(accessCookie(""));
+                when(authCookieFactory.expireRefreshCookie(request)).thenReturn(refreshCookie(""));
+
+                // when
+                ResponseEntity<ApiResponse<String>> response = authController.logout(request);
+
+                // then
+                assertThat(response.getStatusCode().value()).isEqualTo(200);
+                verifyNoInteractions(tokenService);
+            }
+        }
+
+        @Nested
+        @DisplayName("갱신 토큰 쿠키가 있으면")
+        class WithRefreshCookie {
+
+            @Test
+            @DisplayName("토큰 폐기를 요청하고 성공 응답을 반환한다")
+            void revokesToken() {
+                // given
+                String refreshToken = "refresh-token";
+                MockHttpServletRequest request = new MockHttpServletRequest();
+                when(authCookieResolver.findRefreshToken(request)).thenReturn(Optional.of(refreshToken));
+                when(authCookieFactory.expireAccessCookie(request)).thenReturn(accessCookie(""));
+                when(authCookieFactory.expireRefreshCookie(request)).thenReturn(refreshCookie(""));
+
+                // when
+                ResponseEntity<ApiResponse<String>> response = authController.logout(request);
+
+                // then
+                verify(tokenService).revoke(refreshToken);
+                assertThat(response.getStatusCode().value()).isEqualTo(200);
             }
         }
     }
@@ -223,9 +286,8 @@ class AuthControllerTest {
 
                 when(authService.authenticate(email, "temporary-password"))
                         .thenReturn(new AuthService.AuthenticateResult(user, true));
-                when(tokenIssuer.issue(user, true, null))
-                        .thenReturn(new TokenIssuer.IssuedTokens(
-                                accessToken, accessExpiration, refreshToken, refreshExpiration));
+                when(tokenService.issue(user, true, null))
+                        .thenReturn(new IssuedTokens(accessToken, accessExpiration, refreshToken, refreshExpiration));
                 when(authCookieFactory.createAccessCookie(httpRequest, accessToken, accessExpiration))
                         .thenReturn(accessCookie(accessToken));
                 when(authCookieFactory.createRefreshCookie(httpRequest, refreshToken, refreshExpiration))
@@ -235,7 +297,7 @@ class AuthControllerTest {
                 ResponseEntity<ApiResponse<LoginResponse>> response = authController.login(request, httpRequest);
 
                 // then
-                verify(tokenIssuer).issue(user, true, null);
+                verify(tokenService).issue(user, true, null);
                 assertThat(response.getStatusCode().value()).isEqualTo(200);
                 assertThat(response.getHeaders().get("Set-Cookie"))
                         .containsExactly("access_token=" + accessToken, "refresh_token=" + refreshToken);
@@ -373,14 +435,5 @@ class AuthControllerTest {
 
     private static ResponseCookie refreshCookie(String token) {
         return ResponseCookie.from("refresh_token", token).build();
-    }
-
-    private static String refreshFailureMessage(TokenIssuer.RefreshFailure failure) {
-        return switch (failure) {
-            case INVALID_TOKEN -> "유효하지 않은 리프레시";
-            case MISSING_JTI -> "유효하지 않은 리프레시(jti 없음)";
-            case HASH_MISMATCH -> "유효하지 않은 리프레시(대조 실패)";
-            case USER_NOT_FOUND -> "유효하지 않은 리프레시(사용자 없음)";
-        };
     }
 }

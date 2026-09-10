@@ -1,8 +1,9 @@
 package com.fmi.domain.auth.web.controller;
 
 import com.fmi.domain.Enum.Provider;
+import com.fmi.domain.auth.data.IssuedTokens;
 import com.fmi.domain.auth.service.SocialLoginService;
-import com.fmi.domain.auth.service.TokenIssuer;
+import com.fmi.domain.auth.service.TokenService;
 import com.fmi.domain.auth.web.dto.KakaoLoginRequest;
 import com.fmi.domain.auth.web.response.LoginResponse;
 import com.fmi.domain.auth.web.swagger.KakaoAuthSwagger;
@@ -25,7 +26,7 @@ public class KakaoAuthController implements KakaoAuthSwagger {
 
     private final KakaoOAuthClient kakaoOAuthService;
     private final SocialLoginService socialLoginService;
-    private final TokenIssuer tokenIssuer;
+    private final TokenService tokenService;
     private final AuthCookieFactory authCookieFactory;
 
     @PostMapping
@@ -53,7 +54,7 @@ public class KakaoAuthController implements KakaoAuthSwagger {
         var localUser = result.user();
         boolean termsAgreed = localUser.isPrivacyPolicyAgreed() && localUser.isTermsOfServiceAgreed();
 
-        TokenIssuer.IssuedTokens issuedTokens = tokenIssuer.issue(localUser, false, Provider.KAKAO);
+        IssuedTokens issuedTokens = tokenService.issue(localUser, false, Provider.KAKAO);
 
         ResponseCookie accessCookie = authCookieFactory.createAccessCookie(
                 request, issuedTokens.accessToken(), issuedTokens.accessExpiration());
