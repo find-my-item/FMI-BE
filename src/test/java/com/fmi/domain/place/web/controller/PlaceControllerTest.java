@@ -1,11 +1,13 @@
 package com.fmi.domain.place.web.controller;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fmi.domain.place.data.PlaceDailySchedule;
@@ -100,7 +102,14 @@ class PlaceControllerTest extends IntegrationTestSupport {
                         new MockMultipartFile("thumbnail", "closed.png", "image/png", new byte[] {1}));
 
                 // when & then
-                mockMvc.perform(get("/places")).andExpect(status().isOk());
+                mockMvc.perform(get("/places"))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.code").value("COMMON200"))
+                        .andExpect(
+                                jsonPath("$.result.places[0].operationStatus").value("CLOSED"))
+                        .andExpect(jsonPath("$.result.places[0].todayBusinessHours")
+                                .value(nullValue()))
+                        .andExpect(jsonPath("$.result.places[0].isFavorite").value(false));
             }
         }
 
