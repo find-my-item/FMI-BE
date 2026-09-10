@@ -1,8 +1,6 @@
 package com.fmi.domain.auth.web.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,10 +15,9 @@ import com.fmi.external.oauth.kakao.KakaoOAuthClient;
 import com.fmi.external.oauth.kakao.KakaoOAuthClient.KakaoToken;
 import com.fmi.external.oauth.kakao.KakaoOAuthClient.KakaoUser;
 import com.fmi.global.apiPayload.ApiResponse;
-import com.fmi.security.CookieFactory;
+import com.fmi.security.AuthCookieFactory;
 import java.time.Instant;
 import java.util.Date;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -31,7 +28,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class KakaoAuthControllerTest {
@@ -46,16 +42,10 @@ class KakaoAuthControllerTest {
     private TokenIssuer tokenIssuer;
 
     @Mock
-    private CookieFactory cookieFactory;
+    private AuthCookieFactory authCookieFactory;
 
     @InjectMocks
     private KakaoAuthController kakaoAuthController;
-
-    @BeforeEach
-    void setUp() {
-        ReflectionTestUtils.setField(kakaoAuthController, "accessCookieName", "access_token");
-        ReflectionTestUtils.setField(kakaoAuthController, "refreshCookieName", "refresh_token");
-    }
 
     @Nested
     @DisplayName("카카오 로그인")
@@ -96,10 +86,10 @@ class KakaoAuthControllerTest {
                 when(tokenIssuer.issue(localUser, false, Provider.KAKAO))
                         .thenReturn(new TokenIssuer.IssuedTokens(
                                 "access-token", accessExpiration, "refresh-token", refreshExpiration));
-                when(cookieFactory.build(eq(httpRequest), eq("access_token"), eq("access-token"), any()))
+                when(authCookieFactory.createAccessCookie(httpRequest, "access-token", accessExpiration))
                         .thenReturn(ResponseCookie.from("access_token", "access-token")
                                 .build());
-                when(cookieFactory.build(eq(httpRequest), eq("refresh_token"), eq("refresh-token"), any()))
+                when(authCookieFactory.createRefreshCookie(httpRequest, "refresh-token", refreshExpiration))
                         .thenReturn(ResponseCookie.from("refresh_token", "refresh-token")
                                 .build());
 

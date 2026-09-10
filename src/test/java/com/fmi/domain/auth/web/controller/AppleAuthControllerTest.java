@@ -1,7 +1,5 @@
 package com.fmi.domain.auth.web.controller;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,7 +12,7 @@ import com.fmi.domain.auth.web.response.LoginResponse;
 import com.fmi.domain.user.data.User;
 import com.fmi.external.oauth.apple.AppleOAuthClient;
 import com.fmi.global.apiPayload.ApiResponse;
-import com.fmi.security.CookieFactory;
+import com.fmi.security.AuthCookieFactory;
 import java.time.Instant;
 import java.util.Date;
 import org.assertj.core.api.SoftAssertions;
@@ -26,7 +24,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class AppleAuthControllerTest {
@@ -41,7 +38,7 @@ class AppleAuthControllerTest {
     private TokenIssuer tokenIssuer;
 
     @Mock
-    private CookieFactory cookieFactory;
+    private AuthCookieFactory authCookieFactory;
 
     @InjectMocks
     private AppleAuthController appleAuthController;
@@ -49,8 +46,6 @@ class AppleAuthControllerTest {
     @Test
     void Apple_로그인에_성공하면_두_JWT_쿠키와_로그인_응답을_반환한다() {
         // given
-        ReflectionTestUtils.setField(appleAuthController, "accessCookieName", "access_token");
-        ReflectionTestUtils.setField(appleAuthController, "refreshCookieName", "refresh_token");
         AppleLoginRequest request = new AppleLoginRequest("apple-code", "dev");
         MockHttpServletRequest httpRequest = new MockHttpServletRequest();
         User user = User.builder()
@@ -61,15 +56,14 @@ class AppleAuthControllerTest {
         when(appleOAuthService.exchangeCodeForSubject("apple-code", "dev")).thenReturn("apple-subject");
         when(socialLoginService.upsertUserFromApple("apple-subject"))
                 .thenReturn(new SocialLoginService.AppleLoginResult(user));
+        Date accessExpiration = Date.from(Instant.now().plusSeconds(900));
+        Date refreshExpiration = Date.from(Instant.now().plusSeconds(1_200));
         when(tokenIssuer.issue(user, false, Provider.APPLE))
                 .thenReturn(new TokenIssuer.IssuedTokens(
-                        "access-token",
-                        Date.from(Instant.now().plusSeconds(900)),
-                        "refresh-token",
-                        Date.from(Instant.now().plusSeconds(1_200))));
-        when(cookieFactory.build(eq(httpRequest), eq("access_token"), eq("access-token"), any()))
+                        "access-token", accessExpiration, "refresh-token", refreshExpiration));
+        when(authCookieFactory.createAccessCookie(httpRequest, "access-token", accessExpiration))
                 .thenReturn(ResponseCookie.from("access_token", "access-token").build());
-        when(cookieFactory.build(eq(httpRequest), eq("refresh_token"), eq("refresh-token"), any()))
+        when(authCookieFactory.createRefreshCookie(httpRequest, "refresh-token", refreshExpiration))
                 .thenReturn(
                         ResponseCookie.from("refresh_token", "refresh-token").build());
 

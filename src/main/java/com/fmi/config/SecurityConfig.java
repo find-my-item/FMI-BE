@@ -3,6 +3,7 @@ package com.fmi.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fmi.global.apiPayload.ApiResponse;
 import com.fmi.global.apiPayload.code.status.ErrorStatus;
+import com.fmi.security.AuthCookieResolver;
 import com.fmi.security.CustomUserDetailsService;
 import com.fmi.security.JwtAuthenticationFilter;
 import com.fmi.security.JwtTokenProvider;
@@ -40,7 +41,10 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(
-            HttpSecurity http, JwtTokenProvider tokenProvider, CustomUserDetailsService userDetailsService)
+            HttpSecurity http,
+            JwtTokenProvider tokenProvider,
+            CustomUserDetailsService userDetailsService,
+            AuthCookieResolver authCookieResolver)
             throws Exception {
         http.csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
@@ -98,7 +102,7 @@ public class SecurityConfig {
                 .httpBasic(h -> h.disable());
 
         http.addFilterBefore(
-                new JwtAuthenticationFilter(tokenProvider, userDetailsService),
+                new JwtAuthenticationFilter(tokenProvider, userDetailsService, authCookieResolver),
                 UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

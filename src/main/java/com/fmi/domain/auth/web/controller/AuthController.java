@@ -15,13 +15,12 @@ import com.fmi.domain.auth.web.swagger.AuthSwagger;
 import com.fmi.domain.user.service.NicknameService;
 import com.fmi.domain.user.web.response.CheckResponse;
 import com.fmi.global.apiPayload.ApiResponse;
-import com.fmi.security.CookieFactory;
-import jakarta.servlet.http.Cookie;
+import com.fmi.security.AuthCookieFactory;
+import com.fmi.security.AuthCookieResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -37,13 +36,8 @@ public class AuthController implements AuthSwagger {
     private final TokenIssuer tokenIssuer;
     private final PasswordService passwordService;
     private final WithdrawalService withdrawalService;
-    private final CookieFactory cookieFactory;
-
-    @Value("${jwt.cookie.name:refresh_token}")
-    private String refreshCookieName;
-
-    @Value("${jwt.cookie.access-token-name:access_token}")
-    private String accessCookieName;
+    private final AuthCookieFactory authCookieFactory;
+    private final AuthCookieResolver authCookieResolver;
 
     @PostMapping("/auth/signup")
     @Override
@@ -71,7 +65,7 @@ public class AuthController implements AuthSwagger {
     @PostMapping("/auth/refresh")
     @Override
     public ResponseEntity<ApiResponse<LoginResponse>> refresh(HttpServletRequest request) {
-        String refreshJwt = getCookieValue(request, refreshCookieName);
+        String refreshJwt = authCookieResolver.findRefreshToken(request).orElse(null);
         if (refreshJwt == null || refreshJwt.isEmpty()) {
             return ResponseEntity.status(401)
                     .body(ApiResponse.onFailure("AUTH401-INVALID_REFRESH", "리프레시 토큰 없음", null));
@@ -86,10 +80,10 @@ public class AuthController implements AuthSwagger {
 
         TokenIssuer.IssuedTokens issuedTokens = refreshResult.issuedTokens();
 
-        ResponseCookie accessCookie =
-                buildCookie(request, accessCookieName, issuedTokens.accessToken(), issuedTokens.accessExpiration());
-        ResponseCookie refreshCookie =
-                buildCookie(request, refreshCookieName, issuedTokens.refreshToken(), issuedTokens.refreshExpiration());
+        ResponseCookie accessCookie = authCookieFactory.createAccessCookie(
+                request, issuedTokens.accessToken(), issuedTokens.accessExpiration());
+        ResponseCookie refreshCookie = authCookieFactory.createRefreshCookie(
+                request, issuedTokens.refreshToken(), issuedTokens.refreshExpiration());
 
         return ResponseEntity.ok()
                 .header("Set-Cookie", accessCookie.toString())
@@ -101,10 +95,10 @@ public class AuthController implements AuthSwagger {
             HttpServletRequest request, com.fmi.domain.user.data.User user, boolean isTemporaryPassword) {
         TokenIssuer.IssuedTokens issuedTokens = tokenIssuer.issue(user, isTemporaryPassword, null);
 
-        ResponseCookie accessCookie =
-                buildCookie(request, accessCookieName, issuedTokens.accessToken(), issuedTokens.accessExpiration());
-        ResponseCookie refreshCookie =
-                buildCookie(request, refreshCookieName, issuedTokens.refreshToken(), issuedTokens.refreshExpiration());
+        ResponseCookie accessCookie = authCookieFactory.createAccessCookie(
+                request, issuedTokens.accessToken(), issuedTokens.accessExpiration());
+        ResponseCookie refreshCookie = authCookieFactory.createRefreshCookie(
+                request, issuedTokens.refreshToken(), issuedTokens.refreshExpiration());
 
         return ResponseEntity.ok()
                 .header("Set-Cookie", accessCookie.toString())
@@ -112,29 +106,20 @@ public class AuthController implements AuthSwagger {
                 .body(ApiResponse.onSuccess(AuthConverter.toLoginResponse(user.getId(), isTemporaryPassword)));
     }
 
-    private ResponseCookie buildCookie(
-            HttpServletRequest request, String name, String value, java.util.Date expiration) {
-        return cookieFactory.build(
-                request, name, value, java.time.Duration.between(java.time.Instant.now(), expiration.toInstant()));
-    }
-
     @PostMapping("/auth/logout")
     @Override
     public ResponseEntity<ApiResponse<String>> logout(HttpServletRequest request) {
-        String refreshJwt = getCookieValue(request, refreshCookieName);
+        String refreshJwt = authCookieResolver.findRefreshToken(request).orElse(null);
         if (refreshJwt != null && !refreshJwt.isEmpty()) {
             tokenIssuer.revokeIfValid(refreshJwt);
         }
 
-        // accessToken 쿠키 제거
-        ResponseCookie removeAccess = cookieFactory.expire(request, accessCookieName);
-
-        // refreshToken 쿠키 제거
-        ResponseCookie removeRefresh = cookieFactory.expire(request, refreshCookieName);
+        ResponseCookie accessCookie = authCookieFactory.expireAccessCookie(request);
+        ResponseCookie refreshCookie = authCookieFactory.expireRefreshCookie(request);
 
         return ResponseEntity.ok()
-                .header("Set-Cookie", removeAccess.toString())
-                .header("Set-Cookie", removeRefresh.toString())
+                .header("Set-Cookie", accessCookie.toString())
+                .header("Set-Cookie", refreshCookie.toString())
                 .body(ApiResponse.onSuccess("OK"));
     }
 
@@ -158,22 +143,12 @@ public class AuthController implements AuthSwagger {
             @Valid @RequestBody AccountDeleteRequest request,
             HttpServletRequest httpRequest) {
         withdrawalService.delete(userDetails.getUsername(), request);
-        ResponseCookie removeAccess = cookieFactory.expire(httpRequest, accessCookieName);
-        ResponseCookie removeRefresh = cookieFactory.expire(httpRequest, refreshCookieName);
+        ResponseCookie accessCookie = authCookieFactory.expireAccessCookie(httpRequest);
+        ResponseCookie refreshCookie = authCookieFactory.expireRefreshCookie(httpRequest);
         return ResponseEntity.ok()
-                .header("Set-Cookie", removeAccess.toString())
-                .header("Set-Cookie", removeRefresh.toString())
+                .header("Set-Cookie", accessCookie.toString())
+                .header("Set-Cookie", refreshCookie.toString())
                 .body(ApiResponse.onSuccess(null));
-    }
-
-    private static String getCookieValue(HttpServletRequest request, String name) {
-        if (request == null || request.getCookies() == null) return null;
-        for (Cookie c : request.getCookies()) {
-            if (name.equals(c.getName())) {
-                return c.getValue();
-            }
-        }
-        return null;
     }
 
     private static String refreshFailureMessage(TokenIssuer.RefreshFailure failure) {

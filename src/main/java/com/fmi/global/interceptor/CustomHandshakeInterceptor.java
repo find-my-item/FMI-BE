@@ -1,7 +1,7 @@
 package com.fmi.global.interceptor;
 
+import com.fmi.security.AuthCookieResolver;
 import com.fmi.security.JwtTokenProvider;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +23,7 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
 public class CustomHandshakeInterceptor implements HandshakeInterceptor {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final AuthCookieResolver authCookieResolver;
 
     @Override
     public boolean beforeHandshake(
@@ -38,7 +39,7 @@ public class CustomHandshakeInterceptor implements HandshakeInterceptor {
 
         HttpServletRequest httpRequest = servletRequest.getServletRequest();
 
-        String token = extractCookie(httpRequest, "access_token");
+        String token = authCookieResolver.findAccessToken(httpRequest).orElse(null);
 
         if (token == null) {
             log.warn(
@@ -73,13 +74,4 @@ public class CustomHandshakeInterceptor implements HandshakeInterceptor {
     @Override
     public void afterHandshake(
             ServerHttpRequest request, ServerHttpResponse response, WebSocketHandler wsHandler, Exception exception) {}
-
-    private String extractCookie(HttpServletRequest request, String name) {
-        Cookie[] cookies = request.getCookies();
-        if (cookies == null) return null;
-        for (Cookie cookie : cookies) {
-            if (name.equals(cookie.getName())) return cookie.getValue();
-        }
-        return null;
-    }
 }

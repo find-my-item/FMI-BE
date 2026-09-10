@@ -10,11 +10,10 @@ import com.fmi.external.oauth.kakao.KakaoOAuthClient;
 import com.fmi.external.oauth.kakao.KakaoOAuthClient.KakaoToken;
 import com.fmi.external.oauth.kakao.KakaoOAuthClient.KakaoUser;
 import com.fmi.global.apiPayload.ApiResponse;
-import com.fmi.security.CookieFactory;
+import com.fmi.security.AuthCookieFactory;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,13 +26,7 @@ public class KakaoAuthController implements KakaoAuthSwagger {
     private final KakaoOAuthClient kakaoOAuthService;
     private final SocialLoginService socialLoginService;
     private final TokenIssuer tokenIssuer;
-    private final CookieFactory cookieFactory;
-
-    @Value("${jwt.cookie.name:refresh_token}")
-    private String refreshCookieName;
-
-    @Value("${jwt.cookie.access-token-name:access_token}")
-    private String accessCookieName;
+    private final AuthCookieFactory authCookieFactory;
 
     @PostMapping
     @Override
@@ -62,22 +55,10 @@ public class KakaoAuthController implements KakaoAuthSwagger {
 
         TokenIssuer.IssuedTokens issuedTokens = tokenIssuer.issue(localUser, false, Provider.KAKAO);
 
-        // accessToken 쿠키 설정
-        ResponseCookie accessCookie = cookieFactory.build(
-                request,
-                accessCookieName,
-                issuedTokens.accessToken(),
-                java.time.Duration.between(
-                        java.time.Instant.now(), issuedTokens.accessExpiration().toInstant()));
-
-        // refreshToken 쿠키 설정
-        ResponseCookie refreshCookie = cookieFactory.build(
-                request,
-                refreshCookieName,
-                issuedTokens.refreshToken(),
-                java.time.Duration.between(
-                        java.time.Instant.now(),
-                        issuedTokens.refreshExpiration().toInstant()));
+        ResponseCookie accessCookie = authCookieFactory.createAccessCookie(
+                request, issuedTokens.accessToken(), issuedTokens.accessExpiration());
+        ResponseCookie refreshCookie = authCookieFactory.createRefreshCookie(
+                request, issuedTokens.refreshToken(), issuedTokens.refreshExpiration());
 
         // 응답 생성 및 반환
         // accessToken과 refreshToken은 쿠키로 전송되므로 응답 body에는 포함하지 않습니다.

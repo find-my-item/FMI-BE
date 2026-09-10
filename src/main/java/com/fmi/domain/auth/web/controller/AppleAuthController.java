@@ -7,11 +7,10 @@ import com.fmi.domain.auth.web.dto.AppleLoginRequest;
 import com.fmi.domain.auth.web.response.LoginResponse;
 import com.fmi.external.oauth.apple.AppleOAuthClient;
 import com.fmi.global.apiPayload.ApiResponse;
-import com.fmi.security.CookieFactory;
+import com.fmi.security.AuthCookieFactory;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,13 +26,7 @@ public class AppleAuthController {
     private final AppleOAuthClient appleOAuthService;
     private final SocialLoginService socialLoginService;
     private final TokenIssuer tokenIssuer;
-    private final CookieFactory cookieFactory;
-
-    @Value("${jwt.cookie.name:refresh_token}")
-    private String refreshCookieName;
-
-    @Value("${jwt.cookie.access-token-name:access_token}")
-    private String accessCookieName;
+    private final AuthCookieFactory authCookieFactory;
 
     @PostMapping
     public ResponseEntity<ApiResponse<LoginResponse>> loginWithApple(
@@ -44,19 +37,10 @@ public class AppleAuthController {
 
         TokenIssuer.IssuedTokens issuedTokens = tokenIssuer.issue(localUser, false, Provider.APPLE);
 
-        ResponseCookie accessCookie = cookieFactory.build(
-                httpServletRequest,
-                accessCookieName,
-                issuedTokens.accessToken(),
-                java.time.Duration.between(
-                        java.time.Instant.now(), issuedTokens.accessExpiration().toInstant()));
-        ResponseCookie refreshCookie = cookieFactory.build(
-                httpServletRequest,
-                refreshCookieName,
-                issuedTokens.refreshToken(),
-                java.time.Duration.between(
-                        java.time.Instant.now(),
-                        issuedTokens.refreshExpiration().toInstant()));
+        ResponseCookie accessCookie = authCookieFactory.createAccessCookie(
+                httpServletRequest, issuedTokens.accessToken(), issuedTokens.accessExpiration());
+        ResponseCookie refreshCookie = authCookieFactory.createRefreshCookie(
+                httpServletRequest, issuedTokens.refreshToken(), issuedTokens.refreshExpiration());
 
         return ResponseEntity.ok()
                 .header("Set-Cookie", accessCookie.toString())
