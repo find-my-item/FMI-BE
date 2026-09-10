@@ -29,8 +29,10 @@ public class PlaceOperationStatusCalculator {
                 .filter(schedule -> schedule.dayOfWeek() == today.getDayOfWeek())
                 .findFirst()
                 .orElseThrow(() -> new GeneralException(PlaceErrorStatus.INVALID_SCHEDULE));
+        boolean beforePopupStart = placeType == PlaceType.POPUP && today.isBefore(operationPeriod.getStartDate());
         if (todaySchedule.closed()) {
-            return new PlaceOperationState(PlaceOperationStatus.CLOSED, null);
+            return new PlaceOperationState(
+                    beforePopupStart ? PlaceOperationStatus.UPCOMING : PlaceOperationStatus.CLOSED, null);
         }
 
         PlaceDailySchedule yesterdaySchedule = dailySchedules.stream()
@@ -46,7 +48,7 @@ public class PlaceOperationStatusCalculator {
                         todaySchedule.timeRanges().stream().map(range -> new BusinessHourOccurrence(today, range)))
                 .sorted(Comparator.comparing(BusinessHourOccurrence::startDateTime))
                 .toList();
-        if (placeType == PlaceType.POPUP && today.isBefore(operationPeriod.getStartDate())) {
+        if (beforePopupStart) {
             return new PlaceOperationState(
                     PlaceOperationStatus.UPCOMING,
                     occurrences.stream().map(BusinessHourOccurrence::range).toList());

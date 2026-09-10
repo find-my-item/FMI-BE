@@ -61,7 +61,6 @@ public class MainPlaceController implements MainPlaceSwagger {
         return ApiResponse.onSuccess(NearbyPostResponse.from(postMapService.getNearbyPosts(
                 place.latitude(),
                 place.longitude(),
-                request.getLevel(),
                 request.getPostType(),
                 request.getPostStatus(),
                 request.getCategory(),
@@ -81,7 +80,6 @@ public class MainPlaceController implements MainPlaceSwagger {
         return ApiResponse.onSuccess(postMapService.getNearbyPostMarkers(
                 place.latitude(),
                 place.longitude(),
-                request.getLevel(),
                 request.getPostType(),
                 request.getPostStatus(),
                 request.getCategory(),

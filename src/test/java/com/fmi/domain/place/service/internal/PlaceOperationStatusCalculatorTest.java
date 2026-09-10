@@ -135,6 +135,28 @@ class PlaceOperationStatusCalculatorTest {
 
                 assertThat(result.status()).isEqualTo(PlaceOperationStatus.UPCOMING);
             }
+
+            @Test
+            @DisplayName("정기 휴무일이어도 오픈 예정이다")
+            void itReturnsUpcomingOnClosedDay() {
+                List<PlaceDailySchedule> schedules = Arrays.stream(DayOfWeek.values())
+                        .map(day -> new PlaceDailySchedule(
+                                day,
+                                day == DayOfWeek.THURSDAY,
+                                List.of(new PlaceTimeRange(
+                                        PlaceBusinessHourType.BUSINESS, LocalTime.of(10, 0), LocalTime.of(22, 0)))))
+                        .toList();
+                PlaceOperationPeriod period = PlaceOperationPeriod.builder()
+                        .startDate(LocalDate.of(2026, 9, 11))
+                        .endDate(LocalDate.of(2026, 9, 20))
+                        .build();
+
+                PlaceOperationState result =
+                        calculator.calculate(PlaceType.POPUP, period, schedules, LocalDateTime.of(2026, 9, 10, 12, 0));
+
+                assertThat(result.status()).isEqualTo(PlaceOperationStatus.UPCOMING);
+                assertThat(result.todayBusinessHours()).isNull();
+            }
         }
     }
 }

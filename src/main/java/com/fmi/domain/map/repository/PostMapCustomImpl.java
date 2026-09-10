@@ -65,6 +65,7 @@ public class PostMapCustomImpl implements PostMapCustom {
             double lat,
             double lng,
             MapLevel mapLevel,
+            Double maxDistanceMeters,
             PostType postType,
             PostStatus postStatus,
             Category category,
@@ -87,7 +88,8 @@ public class PostMapCustomImpl implements PostMapCustom {
                 .and(post.latitude.isNotNull())
                 .and(post.longitude.isNotNull())
                 .and(post.latitude.between(lat - latitudeDelta, lat + latitudeDelta))
-                .and(post.longitude.between(lng - longitudeDelta, lng + longitudeDelta));
+                .and(post.longitude.between(lng - longitudeDelta, lng + longitudeDelta))
+                .and(distanceMeter.loe(maxDistanceMeters));
         if (postType != null) {
             where.and(post.postType.eq(postType));
         }
@@ -129,6 +131,7 @@ public class PostMapCustomImpl implements PostMapCustom {
             Long userId,
             Set<Long> excludedUserIds,
             Set<Long> hotPostIds,
+            Double maxDistanceMeters,
             Double lastDistance,
             Long lastPostId) {
 
@@ -185,6 +188,9 @@ public class PostMapCustomImpl implements PostMapCustom {
             where.and(distanceMeter
                     .gt(lastDistance)
                     .or(distanceMeter.eq(lastDistance).and(post.id.lt(lastPostId))));
+        }
+        if (maxDistanceMeters != null) {
+            where.and(distanceMeter.loe(maxDistanceMeters));
         }
 
         List<Tuple> tuples = jpaQueryFactory

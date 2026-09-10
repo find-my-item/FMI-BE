@@ -153,11 +153,24 @@ class PostMapServiceTest extends IntegrationTestSupport {
                 UserDetails userDetails = mock(UserDetails.class);
                 when(userDetails.getUsername()).thenReturn(requester.getEmail());
 
+                postRepository.save(Post.create(
+                        "반경 밖 게시글",
+                        "서울 성동구",
+                        37.5421,
+                        127.0618,
+                        PostType.LOST,
+                        Category.ELECTRONICS,
+                        "장소에서 500미터보다 멀리 있는 게시글입니다.",
+                        false,
+                        LocalDateTime.of(2026, 9, 10, 10, 0),
+                        Radius.DISTANCE_1000,
+                        visibleAuthor));
+
                 // when
                 MapPostPageResponse posts =
-                        postMapService.getNearbyPosts(37.5421, 127.0549, 1, null, null, null, null, null, userDetails);
+                        postMapService.getNearbyPosts(37.5421, 127.0549, null, null, null, null, null, userDetails);
                 List<PostMarkerResponse> markers =
-                        postMapService.getNearbyPostMarkers(37.5421, 127.0549, 1, null, null, null, userDetails);
+                        postMapService.getNearbyPostMarkers(37.5421, 127.0549, null, null, null, userDetails);
 
                 // then
                 assertThat(posts.posts()).extracting(post -> post.id()).containsExactly(visiblePost.getId());
@@ -174,7 +187,7 @@ class PostMapServiceTest extends IntegrationTestSupport {
             void itReturnsMapCursorInvalid() {
                 // when & then
                 assertThatThrownBy(() ->
-                                postMapService.getNearbyPosts(37.5421, 127.0549, 1, null, null, null, 10.0, null, null))
+                                postMapService.getNearbyPosts(37.5421, 127.0549, null, null, null, 10.0, null, null))
                         .isInstanceOfSatisfying(GeneralException.class, exception -> assertThat(exception.getCode())
                                 .isEqualTo(MapErrorStatus.CURSOR_INVALID));
             }

@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.ActiveProfiles;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.MySQLContainer;
 
 @SpringBootTest
@@ -29,6 +30,12 @@ public abstract class IntegrationTestSupport {
         @ServiceConnection
         MySQLContainer<?> mysqlContainer() {
             return new MySQLContainer<>("mysql:8.4");
+        }
+
+        @Bean
+        @ServiceConnection(name = "redis")
+        GenericContainer<?> redisContainer() {
+            return new GenericContainer<>("redis:7.4-alpine").withExposedPorts(6379);
         }
 
         @Bean

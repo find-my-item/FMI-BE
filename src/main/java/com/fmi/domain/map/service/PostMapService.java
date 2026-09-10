@@ -30,6 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PostMapService {
+    private static final int NEARBY_POST_RADIUS_METERS = 500;
+    private static final MapLevel NEARBY_POST_PREFILTER_MAP_LEVEL = MapLevel.LEVEL_5;
+
     private final UserQueryService userQueryService;
     private final PostRepository postRepository;
     private final BlockedUserRepository blockedUserRepository;
@@ -88,6 +91,7 @@ public class PostMapService {
                 Objects.nonNull(user) ? user.getId() : null,
                 excludedUserIds,
                 hotPostIds,
+                null,
                 lastDistance,
                 lastPostId);
     }
@@ -123,10 +127,10 @@ public class PostMapService {
                 lastPostId);
     }
 
+    @Transactional(readOnly = true)
     public MapPostPageResponse getNearbyPosts(
             double latitude,
             double longitude,
-            int level,
             PostType postType,
             PostStatus postStatus,
             Category category,
@@ -136,13 +140,12 @@ public class PostMapService {
         if ((lastDistance == null) != (lastPostId == null) || lastDistance != null && lastDistance < 0) {
             throw new GeneralException(MapErrorStatus.CURSOR_INVALID);
         }
-        MapLevel mapLevel = MapLevel.from(level);
         User user = userQueryService.findUserIfNullReturnNull(userDetails);
         Set<Long> excludedUserIds = getExcludedUserIds(user);
         return postRepository.findMapPosts(
                 latitude,
                 longitude,
-                mapLevel,
+                NEARBY_POST_PREFILTER_MAP_LEVEL,
                 postType,
                 postStatus,
                 category,
@@ -150,23 +153,30 @@ public class PostMapService {
                 user == null ? null : user.getId(),
                 excludedUserIds,
                 Set.of(),
+                (double) NEARBY_POST_RADIUS_METERS,
                 lastDistance,
                 lastPostId);
     }
 
+    @Transactional(readOnly = true)
     public List<PostMarkerResponse> getNearbyPostMarkers(
             double latitude,
             double longitude,
-            int level,
             PostType postType,
             PostStatus postStatus,
             Category category,
             UserDetails userDetails) {
-        MapLevel mapLevel = MapLevel.from(level);
         User user = userQueryService.findUserIfNullReturnNull(userDetails);
         Set<Long> excludedUserIds = getExcludedUserIds(user);
         return postRepository.findNearbyPostMarkers(
-                latitude, longitude, mapLevel, postType, postStatus, category, excludedUserIds);
+                latitude,
+                longitude,
+                NEARBY_POST_PREFILTER_MAP_LEVEL,
+                (double) NEARBY_POST_RADIUS_METERS,
+                postType,
+                postStatus,
+                category,
+                excludedUserIds);
     }
 
     private Set<Long> getExcludedUserIds(User user) {

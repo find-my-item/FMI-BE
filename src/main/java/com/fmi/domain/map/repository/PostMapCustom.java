@@ -16,6 +16,7 @@ public interface PostMapCustom {
             double lat,
             double lng,
             MapLevel mapLevel,
+            Double maxDistanceMeters,
             PostType postType,
             PostStatus postStatus,
             Category category,
@@ -32,6 +33,7 @@ public interface PostMapCustom {
             Long userId,
             Set<Long> excludedUserIds,
             Set<Long> hotPostIds,
+            Double maxDistanceMeters,
             Double lastDistance,
             Long lastPostId);
 

@@ -82,6 +82,44 @@ class AdminPlaceControllerTest extends IntegrationTestSupport {
                         .andExpect(jsonPath("$.result.thumbnailUrl").value("thumbnail-url"))
                         .andExpect(jsonPath("$.result.weeklySchedules.length()").value(7));
             }
+
+            @Test
+            @WithMockUser(roles = "ADMIN")
+            @DisplayName("주소가 255자를 넘으면 400을 반환한다")
+            void itRejectsTooLongAddress() throws Exception {
+                // given
+                String requestJson = """
+                    {
+                      "name": "성수 카페",
+                      "address": "%s",
+                      "latitude": 37.5421,
+                      "longitude": 127.0549,
+                      "station": "성수역",
+                      "stationDistanceMeters": 320,
+                      "type": "CAFE",
+                      "weeklySchedules": [
+                        {"dayOfWeek":"MONDAY","isClosed":false,"timeRanges":[{"type":"BUSINESS","startTime":"10:00","endTime":"22:00"}]},
+                        {"dayOfWeek":"TUESDAY","isClosed":false,"timeRanges":[{"type":"BUSINESS","startTime":"10:00","endTime":"22:00"}]},
+                        {"dayOfWeek":"WEDNESDAY","isClosed":false,"timeRanges":[{"type":"BUSINESS","startTime":"10:00","endTime":"22:00"}]},
+                        {"dayOfWeek":"THURSDAY","isClosed":false,"timeRanges":[{"type":"BUSINESS","startTime":"10:00","endTime":"22:00"}]},
+                        {"dayOfWeek":"FRIDAY","isClosed":false,"timeRanges":[{"type":"BUSINESS","startTime":"10:00","endTime":"22:00"}]},
+                        {"dayOfWeek":"SATURDAY","isClosed":false,"timeRanges":[{"type":"BUSINESS","startTime":"10:00","endTime":"22:00"}]},
+                        {"dayOfWeek":"SUNDAY","isClosed":true,"timeRanges":[{"type":"BUSINESS","startTime":"10:00","endTime":"22:00"}]}
+                      ]
+                    }
+                    """.formatted("가".repeat(256));
+                MockMultipartFile request = new MockMultipartFile(
+                        "request",
+                        "request.json",
+                        MediaType.APPLICATION_JSON_VALUE,
+                        requestJson.getBytes(StandardCharsets.UTF_8));
+                MockMultipartFile thumbnail =
+                        new MockMultipartFile("thumbnail", "thumbnail.png", MediaType.IMAGE_PNG_VALUE, new byte[] {1});
+
+                // when & then
+                mockMvc.perform(multipart("/admin/places").file(request).file(thumbnail))
+                        .andExpect(status().isBadRequest());
+            }
         }
 
         @Nested

@@ -86,19 +86,6 @@ class PlaceHomeServiceTest extends IntegrationTestSupport {
                                 List.of(new PlaceTimeRange(
                                         PlaceBusinessHourType.BUSINESS, LocalTime.of(10, 0), LocalTime.of(22, 0)))))
                         .toList();
-                Long expiredPopupId = placeService.create(
-                        new PlaceUpsertCommand(
-                                "종료 팝업",
-                                "서울 성동구",
-                                37.54,
-                                127.05,
-                                "성수역",
-                                100,
-                                PlaceType.POPUP,
-                                LocalDate.of(2026, 9, 1),
-                                LocalDate.of(2026, 9, 9),
-                                schedules),
-                        new MockMultipartFile("thumbnail", "expired.png", "image/png", new byte[] {1}));
                 for (int index = 1; index <= 6; index++) {
                     placeService.create(
                             new PlaceUpsertCommand(
@@ -114,9 +101,22 @@ class PlaceHomeServiceTest extends IntegrationTestSupport {
                                     schedules),
                             new MockMultipartFile("thumbnail", "cafe-" + index + ".png", "image/png", new byte[] {1}));
                 }
+                Long expiredPopupId = placeService.create(
+                        new PlaceUpsertCommand(
+                                "종료 팝업",
+                                "서울 성동구",
+                                37.54,
+                                127.05,
+                                "성수역",
+                                100,
+                                PlaceType.POPUP,
+                                LocalDate.of(2026, 9, 1),
+                                LocalDate.of(2026, 9, 9),
+                                schedules),
+                        new MockMultipartFile("thumbnail", "expired.png", "image/png", new byte[] {1}));
 
                 // when
-                List<PlaceSummary> result = placeService.getHomePlaces(PlaceType.CAFE, null);
+                List<PlaceSummary> result = placeService.getHomePlaces(null, null);
 
                 // then
                 assertThat(result).hasSize(5);
