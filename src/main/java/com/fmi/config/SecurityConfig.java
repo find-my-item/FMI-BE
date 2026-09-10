@@ -83,6 +83,10 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/main/posts/**")
                         .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/places")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/main/places/**")
+                        .permitAll()
                         .requestMatchers(HttpMethod.GET, "/push/vapid-key")
                         .permitAll()
                         // 관리자 전용 API 보호

@@ -61,6 +61,65 @@ public class PostMapCustomImpl implements PostMapCustom {
     }
 
     @Override
+    public List<PostMarkerResponse> findNearbyPostMarkers(
+            double lat,
+            double lng,
+            MapLevel mapLevel,
+            Double maxDistanceMeters,
+            PostType postType,
+            PostStatus postStatus,
+            Category category,
+            Set<Long> excludedUserIds) {
+        QPost post = QPost.post;
+        double latitudeDelta = mapLevel.getHalfHeightMeter() / 111_320.0;
+        double longitudeScale = Math.max(Math.abs(Math.cos(Math.toRadians(lat))), 1e-8);
+        double longitudeDelta = mapLevel.getHalfWidthMeter() / (111_320.0 * longitudeScale);
+        NumberExpression<Double> distanceMeter = Expressions.numberTemplate(
+                Double.class,
+                "ST_Distance_Sphere(POINT({0},{1}), POINT({2},{3}))",
+                post.longitude,
+                post.latitude,
+                lng,
+                lat);
+
+        BooleanBuilder where = new BooleanBuilder()
+                .and(post.deleted.isFalse())
+                .and(post.temporarySave.isFalse())
+                .and(post.latitude.isNotNull())
+                .and(post.longitude.isNotNull())
+                .and(post.latitude.between(lat - latitudeDelta, lat + latitudeDelta))
+                .and(post.longitude.between(lng - longitudeDelta, lng + longitudeDelta))
+                .and(distanceMeter.loe(maxDistanceMeters));
+        if (postType != null) {
+            where.and(post.postType.eq(postType));
+        }
+        if (postStatus != null) {
+            where.and(post.postStatus.eq(postStatus));
+        }
+        if (category != null) {
+            where.and(post.category.eq(category));
+        }
+        if (excludedUserIds != null && !excludedUserIds.isEmpty()) {
+            where.and(post.user.id.notIn(excludedUserIds));
+        }
+
+        return jpaQueryFactory
+                .select(Projections.constructor(
+                        PostMarkerResponse.class,
+                        post.id,
+                        post.latitude,
+                        post.longitude,
+                        post.category,
+                        post.postType,
+                        post.postStatus))
+                .from(post)
+                .where(where)
+                .orderBy(distanceMeter.asc(), post.id.desc())
+                .limit(10)
+                .fetch();
+    }
+
+    @Override
     public MapPostPageResponse findMapPosts(
             double lat,
             double lng,
@@ -72,6 +131,7 @@ public class PostMapCustomImpl implements PostMapCustom {
             Long userId,
             Set<Long> excludedUserIds,
             Set<Long> hotPostIds,
+            Double maxDistanceMeters,
             Double lastDistance,
             Long lastPostId) {
 
@@ -128,6 +188,9 @@ public class PostMapCustomImpl implements PostMapCustom {
             where.and(distanceMeter
                     .gt(lastDistance)
                     .or(distanceMeter.eq(lastDistance).and(post.id.lt(lastPostId))));
+        }
+        if (maxDistanceMeters != null) {
+            where.and(distanceMeter.loe(maxDistanceMeters));
         }
 
         List<Tuple> tuples = jpaQueryFactory
