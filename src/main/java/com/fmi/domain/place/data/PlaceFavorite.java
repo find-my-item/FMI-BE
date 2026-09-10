@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -15,7 +16,12 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "place_favorite")
+@Table(
+        name = "place_favorite",
+        uniqueConstraints =
+                @UniqueConstraint(
+                        name = "uk_place_favorite_user_place",
+                        columnNames = {"user_id", "place_id"}))
 public class PlaceFavorite extends BaseEntity {
 
     @Id

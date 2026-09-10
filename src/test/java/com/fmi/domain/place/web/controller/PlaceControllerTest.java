@@ -3,7 +3,9 @@ package com.fmi.domain.place.web.controller;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fmi.domain.place.data.PlaceDailySchedule;
@@ -111,6 +113,24 @@ class PlaceControllerTest extends IntegrationTestSupport {
             void itReturnsBadRequest() throws Exception {
                 // when & then
                 mockMvc.perform(get("/places").queryParam("type", "INVALID")).andExpect(status().isBadRequest());
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("가보고 싶은 장소를 변경할 때")
+    class DescribeChangeFavorite {
+
+        @Nested
+        @DisplayName("로그인하지 않은 사용자이면")
+        class ContextWithoutAuthentication {
+
+            @Test
+            @DisplayName("저장과 취소 요청에 401을 반환한다")
+            void itReturnsUnauthorized() throws Exception {
+                // when & then
+                mockMvc.perform(post("/places/1/favorites")).andExpect(status().isUnauthorized());
+                mockMvc.perform(delete("/places/1/favorites")).andExpect(status().isUnauthorized());
             }
         }
     }
