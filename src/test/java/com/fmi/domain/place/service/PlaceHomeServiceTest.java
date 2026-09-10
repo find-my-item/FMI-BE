@@ -69,85 +69,103 @@ class PlaceHomeServiceTest extends IntegrationTestSupport {
 
     @Nested
     @DisplayName("홈 장소를 조회할 때")
-    class GetHomePlaces {
+    class DescribeGetHomePlaces {
 
-        @Test
-        @DisplayName("종료된 팝업은 제외하고 최신 장소를 5개까지 유형별로 반환한다")
-        void returnsLatestFiveVisiblePlacesByType() {
-            List<PlaceDailySchedule> schedules = Arrays.stream(DayOfWeek.values())
-                    .map(day -> new PlaceDailySchedule(
-                            day,
-                            false,
-                            List.of(new PlaceTimeRange(
-                                    PlaceBusinessHourType.BUSINESS, LocalTime.of(10, 0), LocalTime.of(22, 0)))))
-                    .toList();
-            Long expiredPopupId = placeService.create(
-                    new PlaceUpsertCommand(
-                            "종료 팝업",
-                            "서울 성동구",
-                            37.54,
-                            127.05,
-                            "성수역",
-                            100,
-                            PlaceType.POPUP,
-                            LocalDate.of(2026, 9, 1),
-                            LocalDate.of(2026, 9, 9),
-                            schedules),
-                    new MockMultipartFile("thumbnail", "expired.png", "image/png", new byte[] {1}));
-            for (int index = 1; index <= 6; index++) {
-                placeService.create(
+        @Nested
+        @DisplayName("노출 가능한 장소가 5개보다 많으면")
+        class ContextWithMoreThanFiveVisiblePlaces {
+
+            @Test
+            @DisplayName("종료된 팝업은 제외하고 최신 장소를 5개까지 유형별로 반환한다")
+            void itReturnsLatestFiveVisiblePlacesByType() {
+                // given
+                List<PlaceDailySchedule> schedules = Arrays.stream(DayOfWeek.values())
+                        .map(day -> new PlaceDailySchedule(
+                                day,
+                                false,
+                                List.of(new PlaceTimeRange(
+                                        PlaceBusinessHourType.BUSINESS, LocalTime.of(10, 0), LocalTime.of(22, 0)))))
+                        .toList();
+                Long expiredPopupId = placeService.create(
                         new PlaceUpsertCommand(
-                                "카페 " + index,
+                                "종료 팝업",
                                 "서울 성동구",
                                 37.54,
                                 127.05,
                                 "성수역",
                                 100,
-                                PlaceType.CAFE,
-                                null,
-                                null,
+                                PlaceType.POPUP,
+                                LocalDate.of(2026, 9, 1),
+                                LocalDate.of(2026, 9, 9),
                                 schedules),
-                        new MockMultipartFile("thumbnail", "cafe-" + index + ".png", "image/png", new byte[] {1}));
+                        new MockMultipartFile("thumbnail", "expired.png", "image/png", new byte[] {1}));
+                for (int index = 1; index <= 6; index++) {
+                    placeService.create(
+                            new PlaceUpsertCommand(
+                                    "카페 " + index,
+                                    "서울 성동구",
+                                    37.54,
+                                    127.05,
+                                    "성수역",
+                                    100,
+                                    PlaceType.CAFE,
+                                    null,
+                                    null,
+                                    schedules),
+                            new MockMultipartFile("thumbnail", "cafe-" + index + ".png", "image/png", new byte[] {1}));
+                }
+
+                // when
+                List<PlaceSummary> result = placeService.getHomePlaces(PlaceType.CAFE, null);
+
+                // then
+                assertThat(result).hasSize(5);
+                assertThat(result)
+                        .extracting(PlaceSummary::name)
+                        .containsExactly("카페 6", "카페 5", "카페 4", "카페 3", "카페 2");
+                assertThat(result).extracting(PlaceSummary::placeId).doesNotContain(expiredPopupId);
+                assertThat(result).allMatch(place -> place.operationState().status() == PlaceOperationStatus.OPEN);
+                assertThat(result).allMatch(place -> !place.favorite());
             }
-
-            List<PlaceSummary> result = placeService.getHomePlaces(PlaceType.CAFE, null);
-
-            assertThat(result).hasSize(5);
-            assertThat(result).extracting(PlaceSummary::name).containsExactly("카페 6", "카페 5", "카페 4", "카페 3", "카페 2");
-            assertThat(result).extracting(PlaceSummary::placeId).doesNotContain(expiredPopupId);
-            assertThat(result).allMatch(place -> place.operationState().status() == PlaceOperationStatus.OPEN);
-            assertThat(result).allMatch(place -> !place.favorite());
         }
 
-        @Test
-        @DisplayName("로그인 사용자의 저장 여부를 응답에 반영한다")
-        void reflectsAuthenticatedUsersFavorite() {
-            List<PlaceDailySchedule> schedules = Arrays.stream(DayOfWeek.values())
-                    .map(day -> new PlaceDailySchedule(
-                            day,
-                            false,
-                            List.of(new PlaceTimeRange(
-                                    PlaceBusinessHourType.BUSINESS, LocalTime.of(10, 0), LocalTime.of(22, 0)))))
-                    .toList();
-            Long placeId = placeService.create(
-                    new PlaceUpsertCommand(
-                            "저장한 카페", "서울 성동구", 37.54, 127.05, "성수역", 100, PlaceType.CAFE, null, null, schedules),
-                    new MockMultipartFile("thumbnail", "favorite.png", "image/png", new byte[] {1}));
-            User user = userRepository.save(User.builder()
-                    .nickname("장소사용자")
-                    .email("place-user@test.com")
-                    .password("password")
-                    .role(Role.USER)
-                    .build());
-            placeFavoriteRepository.save(PlaceFavorite.builder()
-                    .userId(user.getId())
-                    .placeId(placeId)
-                    .build());
+        @Nested
+        @DisplayName("로그인 사용자가 장소를 저장했으면")
+        class ContextWithFavoritePlace {
 
-            List<PlaceSummary> result = placeService.getHomePlaces(null, user.getEmail());
+            @Test
+            @DisplayName("저장 여부를 true로 반환한다")
+            void itReturnsFavoriteAsTrue() {
+                // given
+                List<PlaceDailySchedule> schedules = Arrays.stream(DayOfWeek.values())
+                        .map(day -> new PlaceDailySchedule(
+                                day,
+                                false,
+                                List.of(new PlaceTimeRange(
+                                        PlaceBusinessHourType.BUSINESS, LocalTime.of(10, 0), LocalTime.of(22, 0)))))
+                        .toList();
+                Long placeId = placeService.create(
+                        new PlaceUpsertCommand(
+                                "저장한 카페", "서울 성동구", 37.54, 127.05, "성수역", 100, PlaceType.CAFE, null, null, schedules),
+                        new MockMultipartFile("thumbnail", "favorite.png", "image/png", new byte[] {1}));
+                User user = userRepository.save(User.builder()
+                        .nickname("장소사용자")
+                        .email("place-user@test.com")
+                        .password("password")
+                        .role(Role.USER)
+                        .build());
+                placeFavoriteRepository.save(PlaceFavorite.builder()
+                        .userId(user.getId())
+                        .placeId(placeId)
+                        .build());
 
-            assertThat(result).singleElement().satisfies(place -> assertThat(place.favorite())
-                    .isTrue());
+                // when
+                List<PlaceSummary> result = placeService.getHomePlaces(null, user.getEmail());
+
+                // then
+                assertThat(result).singleElement().satisfies(place -> assertThat(place.favorite())
+                        .isTrue());
+            }
         }
     }
 }

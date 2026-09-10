@@ -34,8 +34,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Transactional
 @AutoConfigureMockMvc
-@DisplayName("PlaceController")
-class PlaceControllerTest extends IntegrationTestSupport {
+@DisplayName("MainPlaceController")
+class MainPlaceControllerTest extends IntegrationTestSupport {
 
     @Autowired
     private MockMvc mockMvc;
@@ -66,8 +66,8 @@ class PlaceControllerTest extends IntegrationTestSupport {
     }
 
     @Nested
-    @DisplayName("홈 장소를 조회할 때")
-    class DescribeGetHomePlaces {
+    @DisplayName("지도 범위의 장소를 조회할 때")
+    class DescribeSearchLocation {
 
         @Nested
         @DisplayName("로그인하지 않은 사용자이면")
@@ -76,41 +76,34 @@ class PlaceControllerTest extends IntegrationTestSupport {
             @Test
             @DisplayName("조회 요청을 허용한다")
             void itAllowsRequest() throws Exception {
+                // given
                 List<PlaceDailySchedule> schedules = Arrays.stream(DayOfWeek.values())
                         .map(day -> new PlaceDailySchedule(
                                 day,
-                                day == DayOfWeek.THURSDAY,
+                                false,
                                 List.of(new PlaceTimeRange(
                                         PlaceBusinessHourType.BUSINESS, LocalTime.of(10, 0), LocalTime.of(22, 0)))))
                         .toList();
                 placeService.create(
                         new PlaceUpsertCommand(
-                                "목요일 휴무 카페",
+                                "지도 카페",
                                 "서울 성동구",
-                                37.54,
-                                127.05,
+                                37.5421,
+                                127.0549,
                                 "성수역",
                                 100,
                                 PlaceType.CAFE,
                                 null,
                                 null,
                                 schedules),
-                        new MockMultipartFile("thumbnail", "closed.png", "image/png", new byte[] {1}));
+                        new MockMultipartFile("thumbnail", "map.png", "image/png", new byte[] {1}));
 
                 // when & then
-                mockMvc.perform(get("/places")).andExpect(status().isOk());
-            }
-        }
-
-        @Nested
-        @DisplayName("지원하지 않는 장소 유형이면")
-        class ContextWithInvalidPlaceType {
-
-            @Test
-            @DisplayName("400을 반환한다")
-            void itReturnsBadRequest() throws Exception {
-                // when & then
-                mockMvc.perform(get("/places").queryParam("type", "INVALID")).andExpect(status().isBadRequest());
+                mockMvc.perform(get("/main/places/search-location")
+                                .queryParam("latitude", "37.5421")
+                                .queryParam("longitude", "127.0549")
+                                .queryParam("type", "CAFE"))
+                        .andExpect(status().isOk());
             }
         }
     }

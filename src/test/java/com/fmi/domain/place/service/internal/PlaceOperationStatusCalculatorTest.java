@@ -26,93 +26,115 @@ class PlaceOperationStatusCalculatorTest {
 
     @Nested
     @DisplayName("운영 상태를 계산할 때")
-    class Calculate {
+    class DescribeCalculate {
 
-        @Test
-        @DisplayName("정기 휴무일이면 전날 영업이 이어져도 휴무와 null 운영시간을 반환한다")
-        void closedDayTakesPriorityOverYesterdayBusinessHours() {
-            List<PlaceDailySchedule> schedules = Arrays.stream(DayOfWeek.values())
-                    .map(day -> new PlaceDailySchedule(
-                            day,
-                            day == DayOfWeek.SATURDAY,
-                            List.of(new PlaceTimeRange(
-                                    PlaceBusinessHourType.BUSINESS,
-                                    day == DayOfWeek.FRIDAY ? LocalTime.of(18, 0) : LocalTime.of(10, 0),
-                                    day == DayOfWeek.FRIDAY ? LocalTime.of(3, 0) : LocalTime.of(22, 0)))))
-                    .toList();
+        @Nested
+        @DisplayName("정기 휴무일이면")
+        class ContextWithClosedDay {
 
-            PlaceOperationState result =
-                    calculator.calculate(PlaceType.CAFE, null, schedules, LocalDateTime.of(2026, 9, 12, 2, 0));
+            @Test
+            @DisplayName("전날 영업이 이어져도 휴무와 null 운영시간을 반환한다")
+            void itReturnsClosedBeforeYesterdayBusinessHours() {
+                List<PlaceDailySchedule> schedules = Arrays.stream(DayOfWeek.values())
+                        .map(day -> new PlaceDailySchedule(
+                                day,
+                                day == DayOfWeek.SATURDAY,
+                                List.of(new PlaceTimeRange(
+                                        PlaceBusinessHourType.BUSINESS,
+                                        day == DayOfWeek.FRIDAY ? LocalTime.of(18, 0) : LocalTime.of(10, 0),
+                                        day == DayOfWeek.FRIDAY ? LocalTime.of(3, 0) : LocalTime.of(22, 0)))))
+                        .toList();
 
-            assertThat(result.status()).isEqualTo(PlaceOperationStatus.CLOSED);
-            assertThat(result.todayBusinessHours()).isNull();
+                PlaceOperationState result =
+                        calculator.calculate(PlaceType.CAFE, null, schedules, LocalDateTime.of(2026, 9, 12, 2, 0));
+
+                assertThat(result.status()).isEqualTo(PlaceOperationStatus.CLOSED);
+                assertThat(result.todayBusinessHours()).isNull();
+            }
         }
 
-        @Test
-        @DisplayName("브레이크 타임 시작은 포함하고 종료는 제외한다")
-        void usesHalfOpenBreakTimeRange() {
-            List<PlaceDailySchedule> schedules = Arrays.stream(DayOfWeek.values())
-                    .map(day -> new PlaceDailySchedule(
-                            day,
-                            false,
-                            List.of(
-                                    new PlaceTimeRange(
-                                            PlaceBusinessHourType.BUSINESS, LocalTime.of(10, 0), LocalTime.of(22, 0)),
-                                    new PlaceTimeRange(
-                                            PlaceBusinessHourType.BREAK_TIME,
-                                            LocalTime.of(15, 0),
-                                            LocalTime.of(17, 0)))))
-                    .toList();
+        @Nested
+        @DisplayName("브레이크 타임 경계이면")
+        class ContextAtBreakTimeBoundary {
 
-            PlaceOperationState atBreakStart =
-                    calculator.calculate(PlaceType.RESTAURANT, null, schedules, LocalDateTime.of(2026, 9, 10, 15, 0));
-            PlaceOperationState atBreakEnd =
-                    calculator.calculate(PlaceType.RESTAURANT, null, schedules, LocalDateTime.of(2026, 9, 10, 17, 0));
+            @Test
+            @DisplayName("시작은 포함하고 종료는 제외한다")
+            void itUsesHalfOpenBreakTimeRange() {
+                List<PlaceDailySchedule> schedules = Arrays.stream(DayOfWeek.values())
+                        .map(day -> new PlaceDailySchedule(
+                                day,
+                                false,
+                                List.of(
+                                        new PlaceTimeRange(
+                                                PlaceBusinessHourType.BUSINESS,
+                                                LocalTime.of(10, 0),
+                                                LocalTime.of(22, 0)),
+                                        new PlaceTimeRange(
+                                                PlaceBusinessHourType.BREAK_TIME,
+                                                LocalTime.of(15, 0),
+                                                LocalTime.of(17, 0)))))
+                        .toList();
 
-            assertThat(atBreakStart.status()).isEqualTo(PlaceOperationStatus.BREAK_TIME);
-            assertThat(atBreakEnd.status()).isEqualTo(PlaceOperationStatus.OPEN);
+                PlaceOperationState atBreakStart = calculator.calculate(
+                        PlaceType.RESTAURANT, null, schedules, LocalDateTime.of(2026, 9, 10, 15, 0));
+                PlaceOperationState atBreakEnd = calculator.calculate(
+                        PlaceType.RESTAURANT, null, schedules, LocalDateTime.of(2026, 9, 10, 17, 0));
+
+                assertThat(atBreakStart.status()).isEqualTo(PlaceOperationStatus.BREAK_TIME);
+                assertThat(atBreakEnd.status()).isEqualTo(PlaceOperationStatus.OPEN);
+            }
         }
 
-        @Test
-        @DisplayName("전날 시작한 자정 이후 영업과 운영시간을 함께 반환한다")
-        void includesOvernightRangesFromYesterday() {
-            List<PlaceDailySchedule> schedules = Arrays.stream(DayOfWeek.values())
-                    .map(day -> new PlaceDailySchedule(
-                            day,
-                            false,
-                            List.of(new PlaceTimeRange(
-                                    PlaceBusinessHourType.BUSINESS,
-                                    day == DayOfWeek.WEDNESDAY ? LocalTime.of(18, 0) : LocalTime.of(10, 0),
-                                    day == DayOfWeek.WEDNESDAY ? LocalTime.of(3, 0) : LocalTime.of(22, 0)))))
-                    .toList();
+        @Nested
+        @DisplayName("전날 시작한 영업이 자정을 넘으면")
+        class ContextWithOvernightBusinessHours {
 
-            PlaceOperationState result =
-                    calculator.calculate(PlaceType.CAFE, null, schedules, LocalDateTime.of(2026, 9, 10, 2, 59));
+            @Test
+            @DisplayName("전날 영업 상태와 운영시간을 함께 반환한다")
+            void itIncludesOvernightRangesFromYesterday() {
+                List<PlaceDailySchedule> schedules = Arrays.stream(DayOfWeek.values())
+                        .map(day -> new PlaceDailySchedule(
+                                day,
+                                false,
+                                List.of(new PlaceTimeRange(
+                                        PlaceBusinessHourType.BUSINESS,
+                                        day == DayOfWeek.WEDNESDAY ? LocalTime.of(18, 0) : LocalTime.of(10, 0),
+                                        day == DayOfWeek.WEDNESDAY ? LocalTime.of(3, 0) : LocalTime.of(22, 0)))))
+                        .toList();
 
-            assertThat(result.status()).isEqualTo(PlaceOperationStatus.OPEN);
-            assertThat(result.todayBusinessHours()).hasSize(2);
-            assertThat(result.todayBusinessHours().get(0).getStartTime()).isEqualTo(LocalTime.of(18, 0));
+                PlaceOperationState result =
+                        calculator.calculate(PlaceType.CAFE, null, schedules, LocalDateTime.of(2026, 9, 10, 2, 59));
+
+                assertThat(result.status()).isEqualTo(PlaceOperationStatus.OPEN);
+                assertThat(result.todayBusinessHours()).hasSize(2);
+                assertThat(result.todayBusinessHours().get(0).getStartTime()).isEqualTo(LocalTime.of(18, 0));
+            }
         }
 
-        @Test
-        @DisplayName("팝업 운영 시작일 전이면 영업시간 안이어도 오픈 예정이다")
-        void popupBeforeStartDateIsUpcoming() {
-            List<PlaceDailySchedule> schedules = Arrays.stream(DayOfWeek.values())
-                    .map(day -> new PlaceDailySchedule(
-                            day,
-                            false,
-                            List.of(new PlaceTimeRange(
-                                    PlaceBusinessHourType.BUSINESS, LocalTime.of(10, 0), LocalTime.of(22, 0)))))
-                    .toList();
-            PlaceOperationPeriod period = PlaceOperationPeriod.builder()
-                    .startDate(LocalDate.of(2026, 9, 11))
-                    .endDate(LocalDate.of(2026, 9, 20))
-                    .build();
+        @Nested
+        @DisplayName("팝업 운영 시작일 전이면")
+        class ContextBeforePopupStartDate {
 
-            PlaceOperationState result =
-                    calculator.calculate(PlaceType.POPUP, period, schedules, LocalDateTime.of(2026, 9, 10, 12, 0));
+            @Test
+            @DisplayName("영업시간 안이어도 오픈 예정이다")
+            void itReturnsUpcomingBeforePopupStartDate() {
+                List<PlaceDailySchedule> schedules = Arrays.stream(DayOfWeek.values())
+                        .map(day -> new PlaceDailySchedule(
+                                day,
+                                false,
+                                List.of(new PlaceTimeRange(
+                                        PlaceBusinessHourType.BUSINESS, LocalTime.of(10, 0), LocalTime.of(22, 0)))))
+                        .toList();
+                PlaceOperationPeriod period = PlaceOperationPeriod.builder()
+                        .startDate(LocalDate.of(2026, 9, 11))
+                        .endDate(LocalDate.of(2026, 9, 20))
+                        .build();
 
-            assertThat(result.status()).isEqualTo(PlaceOperationStatus.UPCOMING);
+                PlaceOperationState result =
+                        calculator.calculate(PlaceType.POPUP, period, schedules, LocalDateTime.of(2026, 9, 10, 12, 0));
+
+                assertThat(result.status()).isEqualTo(PlaceOperationStatus.UPCOMING);
+            }
         }
     }
 }

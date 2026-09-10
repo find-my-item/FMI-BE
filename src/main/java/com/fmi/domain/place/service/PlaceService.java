@@ -1,7 +1,9 @@
 package com.fmi.domain.place.service;
 
+import com.fmi.domain.map.enums.MapLevel;
 import com.fmi.domain.place.data.Place;
 import com.fmi.domain.place.data.PlaceManagementDetail;
+import com.fmi.domain.place.data.PlaceMapSearchResult;
 import com.fmi.domain.place.data.PlaceOperationPeriod;
 import com.fmi.domain.place.data.PlaceOperationState;
 import com.fmi.domain.place.data.PlaceSummary;
@@ -13,6 +15,7 @@ import com.fmi.domain.place.repository.PlaceRepository;
 import com.fmi.domain.place.service.internal.PlaceBusinessHourUpdater;
 import com.fmi.domain.place.service.internal.PlaceOperationStatusCalculator;
 import com.fmi.domain.place.service.internal.PlaceValidator;
+import com.fmi.domain.place.service.internal.PopupClosingDateTimeCalculator;
 import com.fmi.domain.user.repository.UserRepository;
 import com.fmi.global.apiPayload.exception.GeneralException;
 import com.fmi.global.dto.UploadedImage;
@@ -24,6 +27,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +44,7 @@ public class PlaceService {
     private final PlaceValidator placeValidator;
     private final PlaceBusinessHourUpdater placeBusinessHourUpdater;
     private final PlaceOperationStatusCalculator placeOperationStatusCalculator;
+    private final PopupClosingDateTimeCalculator popupClosingDateTimeCalculator;
     private final S3Service s3Service;
     private final Clock clock;
 
@@ -115,22 +120,79 @@ public class PlaceService {
                     PlaceOperationPeriod operationPeriod = place.getOperationPeriod();
                     PlaceOperationState operationState = placeOperationStatusCalculator.calculate(
                             place.getType(), operationPeriod, place.dailySchedules(), now);
-                    return new PlaceSummary(
-                            place.getId(),
-                            place.getName(),
-                            place.getAddress(),
-                            place.getLatitude(),
-                            place.getLongitude(),
-                            place.getStation(),
-                            place.getStationDistanceMeters(),
-                            place.getType(),
-                            place.getThumbnailUrl(),
-                            operationPeriod == null ? null : operationPeriod.getStartDate(),
-                            operationPeriod == null ? null : operationPeriod.getEndDate(),
-                            operationState,
-                            favoritePlaceIds.contains(place.getId()));
+                    return PlaceSummary.from(place, operationState, favoritePlaceIds.contains(place.getId()));
                 })
                 .toList();
+    }
+
+    public PlaceMapSearchResult getMapPlaces(
+            double latitude, double longitude, int level, PlaceType type, String userEmail) {
+        MapLevel mapLevel = MapLevel.from(level);
+        double latitudeDelta = mapLevel.getHalfHeightMeter() / 111_320.0;
+        double latitudeRadian = Math.toRadians(latitude);
+        double longitudeScale = Math.max(Math.abs(Math.cos(latitudeRadian)), 1e-8);
+        double longitudeDelta = mapLevel.getHalfWidthMeter() / (111_320.0 * longitudeScale);
+        LocalDateTime now = LocalDateTime.now(clock);
+        Page<Long> placeIdPage = placeRepository.findMapPlaceIds(
+                type,
+                latitude,
+                longitude,
+                latitude - latitudeDelta,
+                latitude + latitudeDelta,
+                longitude - longitudeDelta,
+                longitude + longitudeDelta,
+                now,
+                PageRequest.of(0, 10));
+        List<Long> placeIds = placeIdPage.getContent();
+        if (placeIds.isEmpty()) {
+            return new PlaceMapSearchResult(List.of(), Math.toIntExact(placeIdPage.getTotalElements()));
+        }
+
+        List<Place> places = placeRepository.findAllWithSchedulesByIdIn(placeIds);
+        places.sort(Comparator.comparingInt(place -> placeIds.indexOf(place.getId())));
+        Set<Long> favoritePlaceIds = new HashSet<>();
+        if (userEmail != null) {
+            userRepository
+                    .findByEmail(userEmail)
+                    .ifPresent(user -> favoritePlaceIds.addAll(
+                            placeFavoriteRepository.findFavoritePlaceIds(user.getId(), placeIds)));
+        }
+
+        List<PlaceSummary> summaries = places.stream()
+                .map(place -> {
+                    PlaceOperationState operationState = placeOperationStatusCalculator.calculate(
+                            place.getType(), place.getOperationPeriod(), place.dailySchedules(), now);
+                    return PlaceSummary.from(place, operationState, favoritePlaceIds.contains(place.getId()));
+                })
+                .toList();
+        return new PlaceMapSearchResult(summaries, Math.toIntExact(placeIdPage.getTotalElements()));
+    }
+
+    public PlaceSummary getPlaceSummary(Long placeId, String userEmail) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        Place place = placeRepository.findAllWithSchedulesByIdIn(List.of(placeId)).stream()
+                .findFirst()
+                .orElseThrow(() -> new GeneralException(PlaceErrorStatus.NOT_FOUND));
+        if (place.isDeleted()) {
+            throw new GeneralException(PlaceErrorStatus.NOT_FOUND);
+        }
+        if (place.getType() == PlaceType.POPUP
+                && !now.isBefore(
+                        popupClosingDateTimeCalculator.calculate(place.getOperationPeriod(), place.dailySchedules()))) {
+            throw new GeneralException(PlaceErrorStatus.NOT_FOUND);
+        }
+
+        boolean favorite = false;
+        if (userEmail != null) {
+            favorite = userRepository
+                    .findByEmail(userEmail)
+                    .flatMap(user -> placeFavoriteRepository.findByUserIdAndPlaceId(user.getId(), placeId))
+                    .filter(placeFavorite -> placeFavorite.isActive() && placeFavorite.isFavorite())
+                    .isPresent();
+        }
+        PlaceOperationState operationState = placeOperationStatusCalculator.calculate(
+                place.getType(), place.getOperationPeriod(), place.dailySchedules(), now);
+        return PlaceSummary.from(place, operationState, favorite);
     }
 
     @Transactional
