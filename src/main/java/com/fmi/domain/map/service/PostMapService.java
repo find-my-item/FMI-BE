@@ -1,17 +1,22 @@
 package com.fmi.domain.map.service;
 
+import com.fmi.domain.Enum.Category;
 import com.fmi.domain.map.enums.MapLevel;
+import com.fmi.domain.map.exception.MapErrorStatus;
 import com.fmi.domain.map.web.dto.request.LocationMapPostRequest;
 import com.fmi.domain.map.web.dto.request.MapPostRequest;
 import com.fmi.domain.map.web.dto.request.PostMarkerRequest;
 import com.fmi.domain.map.web.dto.request.RecentFoundPostRequest;
 import com.fmi.domain.map.web.dto.response.*;
 import com.fmi.domain.post.data.Post;
+import com.fmi.domain.post.data.PostStatus;
+import com.fmi.domain.post.data.PostType;
 import com.fmi.domain.post.repository.PostRepository;
 import com.fmi.domain.post.service.HotPostService;
 import com.fmi.domain.post.service.PostQueryService;
 import com.fmi.domain.user.data.User;
 import com.fmi.domain.userblock.repository.BlockedUserRepository;
+import com.fmi.global.apiPayload.exception.GeneralException;
 import com.fmi.service.UserQueryService;
 import java.util.HashSet;
 import java.util.List;
@@ -116,6 +121,52 @@ public class PostMapService {
                 hotPostIds,
                 lastDistance,
                 lastPostId);
+    }
+
+    public MapPostPageResponse getNearbyPosts(
+            double latitude,
+            double longitude,
+            int level,
+            PostType postType,
+            PostStatus postStatus,
+            Category category,
+            Double lastDistance,
+            Long lastPostId,
+            UserDetails userDetails) {
+        if ((lastDistance == null) != (lastPostId == null) || lastDistance != null && lastDistance < 0) {
+            throw new GeneralException(MapErrorStatus.CURSOR_INVALID);
+        }
+        MapLevel mapLevel = MapLevel.from(level);
+        User user = userQueryService.findUserIfNullReturnNull(userDetails);
+        Set<Long> excludedUserIds = getExcludedUserIds(user);
+        return postRepository.findMapPosts(
+                latitude,
+                longitude,
+                mapLevel,
+                postType,
+                postStatus,
+                category,
+                null,
+                user == null ? null : user.getId(),
+                excludedUserIds,
+                Set.of(),
+                lastDistance,
+                lastPostId);
+    }
+
+    public List<PostMarkerResponse> getNearbyPostMarkers(
+            double latitude,
+            double longitude,
+            int level,
+            PostType postType,
+            PostStatus postStatus,
+            Category category,
+            UserDetails userDetails) {
+        MapLevel mapLevel = MapLevel.from(level);
+        User user = userQueryService.findUserIfNullReturnNull(userDetails);
+        Set<Long> excludedUserIds = getExcludedUserIds(user);
+        return postRepository.findNearbyPostMarkers(
+                latitude, longitude, mapLevel, postType, postStatus, category, excludedUserIds);
     }
 
     private Set<Long> getExcludedUserIds(User user) {

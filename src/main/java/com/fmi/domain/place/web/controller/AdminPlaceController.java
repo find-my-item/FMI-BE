@@ -34,14 +34,14 @@ public class AdminPlaceController implements AdminPlaceSwagger {
             @Valid @RequestPart("request") PlaceUpsertRequest request,
             @RequestPart("thumbnail") MultipartFile thumbnail) {
         Long placeId = placeService.create(request.toCommand(), thumbnail);
-        PlaceManagementResponse response = PlaceManagementResponse.from(placeService.getForManagement(placeId));
+        PlaceManagementResponse response = PlaceManagementResponse.from(placeService.getManagementDetail(placeId));
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.onSuccess(response));
     }
 
     @Override
     @GetMapping("/{placeId}")
     public ApiResponse<PlaceManagementResponse> get(@PathVariable Long placeId) {
-        return ApiResponse.onSuccess(PlaceManagementResponse.from(placeService.getForManagement(placeId)));
+        return ApiResponse.onSuccess(PlaceManagementResponse.from(placeService.getManagementDetail(placeId)));
     }
 
     @Override
@@ -51,7 +51,7 @@ public class AdminPlaceController implements AdminPlaceSwagger {
             @Valid @RequestPart("request") PlaceUpsertRequest request,
             @RequestPart(value = "thumbnail", required = false) MultipartFile thumbnail) {
         placeService.update(placeId, request.toCommand(), thumbnail);
-        return ApiResponse.onSuccess(PlaceManagementResponse.from(placeService.getForManagement(placeId)));
+        return ApiResponse.onSuccess(PlaceManagementResponse.from(placeService.getManagementDetail(placeId)));
     }
 
     @Override

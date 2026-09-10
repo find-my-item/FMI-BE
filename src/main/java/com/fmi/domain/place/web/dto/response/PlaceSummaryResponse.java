@@ -1,6 +1,5 @@
 package com.fmi.domain.place.web.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fmi.domain.place.data.PlaceSummary;
 import com.fmi.domain.place.data.PlaceTimeRange;
 import com.fmi.domain.place.data.enums.PlaceBusinessHourType;
@@ -22,7 +21,7 @@ public record PlaceSummaryResponse(
         String thumbnailUrl,
         PlaceOperationStatus operationStatus,
         OperationPeriod operationPeriod,
-        @JsonInclude(JsonInclude.Include.ALWAYS) List<TimeRange> todayBusinessHours,
+        List<TimeRange> todayBusinessHours,
         boolean isFavorite) {
 
     public static PlaceSummaryResponse from(PlaceSummary summary) {

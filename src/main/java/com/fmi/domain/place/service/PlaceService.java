@@ -27,8 +27,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -75,7 +73,7 @@ public class PlaceService {
         return placeRepository.save(place).getId();
     }
 
-    public PlaceManagementDetail getForManagement(Long placeId) {
+    public PlaceManagementDetail getManagementDetail(Long placeId) {
         Place place =
                 placeRepository.findById(placeId).orElseThrow(() -> new GeneralException(PlaceErrorStatus.NOT_FOUND));
         if (place.isDeleted()) {
@@ -100,13 +98,20 @@ public class PlaceService {
 
     public List<PlaceSummary> getHomePlaces(PlaceType type, String userEmail) {
         LocalDateTime now = LocalDateTime.now(clock);
-        List<Long> placeIds = placeRepository.findHomePlaceIds(type, now, PageRequest.of(0, 5));
-        if (placeIds.isEmpty()) {
+        List<Long> candidateIds = placeRepository.findHomeCandidateIds(type);
+        if (candidateIds.isEmpty()) {
             return List.of();
         }
 
-        List<Place> places = placeRepository.findAllWithSchedulesByIdIn(placeIds);
-        places.sort(Comparator.comparingInt(place -> placeIds.indexOf(place.getId())));
+        List<Place> candidates = placeRepository.findAllWithSchedulesByIdIn(candidateIds);
+        candidates.sort(Comparator.comparingInt(place -> candidateIds.indexOf(place.getId())));
+        List<Place> places = candidates.stream()
+                .filter(place -> place.getType() != PlaceType.POPUP
+                        || now.isBefore(popupClosingDateTimeCalculator.calculate(
+                                place.getOperationPeriod(), place.dailySchedules())))
+                .limit(5)
+                .toList();
+        List<Long> placeIds = places.stream().map(Place::getId).toList();
         Set<Long> favoritePlaceIds = new HashSet<>();
         if (userEmail != null) {
             userRepository
@@ -133,23 +138,27 @@ public class PlaceService {
         double longitudeScale = Math.max(Math.abs(Math.cos(latitudeRadian)), 1e-8);
         double longitudeDelta = mapLevel.getHalfWidthMeter() / (111_320.0 * longitudeScale);
         LocalDateTime now = LocalDateTime.now(clock);
-        Page<Long> placeIdPage = placeRepository.findMapPlaceIds(
+        List<Long> candidateIds = placeRepository.findMapCandidateIds(
                 type,
                 latitude,
                 longitude,
                 latitude - latitudeDelta,
                 latitude + latitudeDelta,
                 longitude - longitudeDelta,
-                longitude + longitudeDelta,
-                now,
-                PageRequest.of(0, 10));
-        List<Long> placeIds = placeIdPage.getContent();
-        if (placeIds.isEmpty()) {
-            return new PlaceMapSearchResult(List.of(), Math.toIntExact(placeIdPage.getTotalElements()));
+                longitude + longitudeDelta);
+        if (candidateIds.isEmpty()) {
+            return new PlaceMapSearchResult(List.of(), 0);
         }
 
-        List<Place> places = placeRepository.findAllWithSchedulesByIdIn(placeIds);
-        places.sort(Comparator.comparingInt(place -> placeIds.indexOf(place.getId())));
+        List<Place> candidates = placeRepository.findAllWithSchedulesByIdIn(candidateIds);
+        candidates.sort(Comparator.comparingInt(place -> candidateIds.indexOf(place.getId())));
+        List<Place> visiblePlaces = candidates.stream()
+                .filter(place -> place.getType() != PlaceType.POPUP
+                        || now.isBefore(popupClosingDateTimeCalculator.calculate(
+                                place.getOperationPeriod(), place.dailySchedules())))
+                .toList();
+        List<Place> places = visiblePlaces.stream().limit(10).toList();
+        List<Long> placeIds = places.stream().map(Place::getId).toList();
         Set<Long> favoritePlaceIds = new HashSet<>();
         if (userEmail != null) {
             userRepository
@@ -165,7 +174,7 @@ public class PlaceService {
                     return PlaceSummary.from(place, operationState, favoritePlaceIds.contains(place.getId()));
                 })
                 .toList();
-        return new PlaceMapSearchResult(summaries, Math.toIntExact(placeIdPage.getTotalElements()));
+        return new PlaceMapSearchResult(summaries, visiblePlaces.size());
     }
 
     public PlaceSummary getPlaceSummary(Long placeId, String userEmail) {

@@ -12,6 +12,15 @@ public interface PostMapCustom {
 
     List<PostMarkerResponse> findPostMarker(double lat, double lng, MapLevel mapLevel, Set<Long> excludedUserIds);
 
+    List<PostMarkerResponse> findNearbyPostMarkers(
+            double lat,
+            double lng,
+            MapLevel mapLevel,
+            PostType postType,
+            PostStatus postStatus,
+            Category category,
+            Set<Long> excludedUserIds);
+
     MapPostPageResponse findMapPosts(
             double lat,
             double lng,
