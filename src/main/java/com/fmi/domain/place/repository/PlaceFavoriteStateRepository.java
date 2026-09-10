@@ -1,5 +1,8 @@
 package com.fmi.domain.place.repository;
 
+import com.fmi.domain.place.data.FavoritePlaceCandidate;
+import java.time.LocalDateTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -37,6 +40,29 @@ public class PlaceFavoriteStateRepository {
               AND entity_status = 'ACTIVE'
             """;
 
+    private static final String FIND_FAVORITES = """
+            SELECT pf.place_id, pf.updated_at
+            FROM place_favorite pf
+            JOIN place p ON p.id = pf.place_id
+            WHERE pf.user_id = ?
+              AND pf.is_favorite = TRUE
+              AND pf.entity_status = 'ACTIVE'
+              AND p.entity_status = 'ACTIVE'
+            ORDER BY pf.updated_at DESC
+            """;
+
+    private static final String FIND_FAVORITES_AFTER = """
+            SELECT pf.place_id, pf.updated_at
+            FROM place_favorite pf
+            JOIN place p ON p.id = pf.place_id
+            WHERE pf.user_id = ?
+              AND pf.is_favorite = TRUE
+              AND pf.entity_status = 'ACTIVE'
+              AND p.entity_status = 'ACTIVE'
+              AND pf.updated_at < ?
+            ORDER BY pf.updated_at DESC
+            """;
+
     private final JdbcTemplate jdbcTemplate;
 
     public void save(Long placeId, Long userId) {
@@ -45,5 +71,23 @@ public class PlaceFavoriteStateRepository {
 
     public void cancel(Long placeId, Long userId) {
         jdbcTemplate.update(CANCEL_FAVORITE, placeId, userId);
+    }
+
+    public List<FavoritePlaceCandidate> findFavorites(Long userId, LocalDateTime lastFavoriteUpdatedAt) {
+        if (lastFavoriteUpdatedAt == null) {
+            return jdbcTemplate.query(
+                    FIND_FAVORITES,
+                    (resultSet, rowNumber) -> new FavoritePlaceCandidate(
+                            resultSet.getLong("place_id"),
+                            resultSet.getTimestamp("updated_at").toLocalDateTime()),
+                    userId);
+        }
+        return jdbcTemplate.query(
+                FIND_FAVORITES_AFTER,
+                (resultSet, rowNumber) -> new FavoritePlaceCandidate(
+                        resultSet.getLong("place_id"),
+                        resultSet.getTimestamp("updated_at").toLocalDateTime()),
+                userId,
+                lastFavoriteUpdatedAt);
     }
 }
